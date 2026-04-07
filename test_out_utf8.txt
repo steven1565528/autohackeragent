@@ -1,0 +1,30 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0 -- D:\program\auto-hacker\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\program\auto-hacker
+plugins: anyio-4.13.0
+collecting ... collected 0 items / 1 error
+
+=================================== ERRORS ====================================
+____________________ ERROR collecting tests/test_skills.py ____________________
+ImportError while importing test module 'D:\program\auto-hacker\tests\test_skills.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python314\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_skills.py:4: in <module>
+    from skills.engine import SkillEngine, SkillResult
+skills\__init__.py:1: in <module>
+    from skills.engine import SkillEngine, SkillResult
+skills\engine.py:19: in <module>
+    from tools.base import ToolResult
+tools\__init__.py:8: in <module>
+    from tools.skill_tool import SkillTool
+tools\skill_tool.py:15: in <module>
+    from skills.engine import SkillEngine
+E   ImportError: cannot import name 'SkillEngine' from partially initialized module 'skills.engine' (most likely due to a circular import) (D:\program\auto-hacker\skills\engine.py)
+=========================== short test summary info ===========================
+ERROR tests/test_skills.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+============================== 1 error in 0.24s ===============================

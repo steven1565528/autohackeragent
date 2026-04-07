@@ -1,0 +1,146 @@
+# ============================================================
+# Auto-Hacker Agent 配置文件
+# ============================================================
+
+# --- LLM 模型配置 ---
+llm:
+  # 当前使用的模型（从 models 列表中选择 name）
+  active_model: "glm-4-plus"
+
+  # 可选模型列表（额度用尽时快速切换）
+  models:
+    # 智谱 GLM
+    - name: "glm-4-plus"
+      provider: "zhipu"
+      api_base: "https://open.bigmodel.cn/api/paas/v4"
+      model_id: "glm-4-plus"
+      max_tokens: 4096
+      temperature: 0.1
+
+    - name: "glm-4-flash"
+      provider: "zhipu"
+      api_base: "https://open.bigmodel.cn/api/paas/v4"
+      model_id: "glm-4-flash"
+      max_tokens: 4096
+      temperature: 0.1
+
+    # 小米 MiLM
+    - name: "milm"
+      provider: "xiaomi"
+      api_base: "https://api.ai.xiaomi.com/v1"
+      model_id: "milm-large"
+      max_tokens: 4096
+      temperature: 0.1
+
+    # DeepSeek（赛事可能提供体验 Key）
+    - name: "deepseek-chat"
+      provider: "deepseek"
+      api_base: "https://api.deepseek.com/v1"
+      model_id: "deepseek-chat"
+      max_tokens: 4096
+      temperature: 0.1
+
+    - name: "deepseek-reasoner"
+      provider: "deepseek"
+      api_base: "https://api.deepseek.com/v1"
+      model_id: "deepseek-reasoner"
+      max_tokens: 8192
+      temperature: 0.1
+
+    # 字节跳动 - 豆包
+    - name: "doubao-pro"
+      provider: "volcengine"
+      api_base: "https://ark.cn-beijing.volces.com/api/v3"
+      model_id: "doubao-pro-256k"
+      max_tokens: 4096
+      temperature: 0.1
+
+    # 阿里 通义千问
+    - name: "qwen-max"
+      provider: "dashscope"
+      api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      model_id: "qwen-max"
+      max_tokens: 4096
+      temperature: 0.1
+
+    - name: "qwen-plus"
+      provider: "dashscope"
+      api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      model_id: "qwen-plus"
+      max_tokens: 4096
+      temperature: 0.1
+
+    # 百度 文心一言
+    - name: "ernie-4"
+      provider: "qianfan"
+      api_base: "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat"
+      model_id: "ernie-4.0-8k"
+      max_tokens: 4096
+      temperature: 0.1
+
+    # OpenAI（备用）
+    - name: "gpt-4o"
+      provider: "openai"
+      api_base: "https://api.openai.com/v1"
+      model_id: "gpt-4o"
+      max_tokens: 4096
+      temperature: 0.1
+
+  # 模型调用通用参数
+  retry_count: 3
+  retry_delay: 2  # 秒
+  request_timeout: 120  # 秒
+
+# --- 比赛平台 API 配置 ---
+platform:
+  # 官方 API 基地址（赛前更新）
+  api_base: "https://api.competition.example.com"
+  # 队伍 Token（赛前更新）
+  team_token: ""
+
+# --- Agent 运行参数 ---
+agent:
+  # 单题最大推理步数
+  max_steps_per_challenge: 50
+  # 单步最大执行时间（秒）
+  step_timeout: 300
+  # 工具输出最大长度（字符），超出将截断
+  max_output_length: 8000
+  # 是否自动请求提示（注意：-10% 扣分）
+  auto_request_hint: false
+  # 提示请求阈值：当尝试步数超过此值且无进展时请求提示
+  hint_request_threshold: 30
+  # 是否启用多题并行
+  parallel_challenges: false
+
+# --- 工具配置 ---
+tools:
+  # Shell 命令执行
+  shell:
+    timeout: 120  # 单命令超时（秒）
+    # 禁止执行的命令模式
+    blocked_patterns:
+      - "rm -rf /"
+      - "mkfs"
+      - "dd if="
+      - ":(){:|:&};:"
+
+  # Nmap
+  nmap:
+    default_args: "-sV -sC"
+    timeout: 300
+
+  # SQLMap
+  sqlmap:
+    default_args: "--batch --random-agent"
+    timeout: 600
+
+# --- 日志配置 ---
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  # 日志输出目录
+  log_dir: "./logs"
+  # 是否记录完整 LLM 对话
+  log_llm_conversations: true
+  # 是否记录工具原始输出
+  log_raw_tool_output: true

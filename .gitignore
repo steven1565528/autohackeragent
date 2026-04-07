@@ -1,0 +1,22 @@
+# Auto-Hacker Agent
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# 环境变量（含 API Key，切勿提交！）
+.env
+
+# 日志
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 系统文件
+.DS_Store
+Thumbs.db
