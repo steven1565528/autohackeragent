@@ -1,0 +1,82 @@
+id: ext_nikto
+name: Nikto Web 扫描
+description: "使用 Nikto 进行 Web 服务器漏洞扫描，检测过时软件版本、危险文件/CGI、服务器配置错误、已知漏洞（7000+ 检查项），支持 SSL/TLS 扫描"
+homepage: "https://github.com/sullo/nikto"
+category: scan
+binary: nikto
+version_cmd: "nikto -Version"
+
+install:
+  brew: "brew install nikto"
+  apt: "sudo apt install nikto"
+  manual: "git clone https://github.com/sullo/nikto.git"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标 URL 或主机（如 http://target.com 或 192.168.1.1）"
+    required: true
+  - name: port
+    type: string
+    description: "目标端口（逗号分隔多个）"
+  - name: ssl
+    type: string
+    description: "强制使用 SSL（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: tuning
+    type: string
+    description: "扫描类型调优（1=文件上传 2=默认文件 3=信息泄露 4=注入 5=远程获取 6=DoS 7=远程shell 8=命令执行 9=SQL注入 0=文件上传 a=认证绕过 b=软件识别 c=远程代码 x=反向调优排除）"
+    default: "123456789abc"
+  - name: plugins
+    type: string
+    description: "指定插件（逗号分隔，如 apache_expect_xss,ssl）"
+  - name: maxtime
+    type: string
+    description: "最大扫描时间（秒）"
+    default: "300"
+  - name: no_404
+    type: string
+    description: "禁用 404 猜测（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: user_agent
+    type: string
+    description: "自定义 User-Agent"
+
+command_template: |
+  -h {{.target}}
+  {{if .port}}-p {{.port}}{{end}}
+  {{if eq .ssl "true"}}-ssl{{end}}
+  -Tuning {{.tuning}}
+  {{if .plugins}}-Plugins {{.plugins}}{{end}}
+  -maxtime {{.maxtime}}
+  {{if eq .no_404 "true"}}-no404{{end}}
+  {{if .user_agent}}-useragent "{{.user_agent}}"{{end}}
+  -Format json
+  -output {{.OutputFile}}
+  -nointeractive
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    results_path: "vulnerabilities"
+    fields:
+      - { name: id, path: "id" }
+      - { name: method, path: "method" }
+      - { name: url, path: "url" }
+      - { name: msg, path: "msg" }
+      - { name: references, path: "references" }
+
+findings_mapping:
+  type: vulnerability
+  severity: medium
+  target_field: url
+  detail_template: "[NIKTO-{{.id}}] {{.msg}}"
+
+constraints:
+  timeout: 600s
+  proxy_flag: "-useproxy"
+  max_concurrent: 1

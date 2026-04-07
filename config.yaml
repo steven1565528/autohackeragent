@@ -5,7 +5,7 @@
 # --- LLM 模型配置 ---
 llm:
   # 当前使用的模型（从 models 列表中选择 name）
-  active_model: "glm-4-plus"
+  active_model: "deepseek-chat"
 
   # 可选模型列表（额度用尽时快速切换）
   models:
@@ -101,7 +101,7 @@ platform:
 # --- Agent 运行参数 ---
 agent:
   # 单题最大推理步数
-  max_steps_per_challenge: 50
+  max_steps_per_challenge: 100
   # 单步最大执行时间（秒）
   step_timeout: 300
   # 工具输出最大长度（字符），超出将截断
@@ -112,6 +112,8 @@ agent:
   hint_request_threshold: 30
   # 是否启用多题并行
   parallel_challenges: false
+  # 同目标情报持久化缓存
+  target_intelligence_path: "./state/target_intelligence.json"
 
 # --- 工具配置 ---
 tools:
@@ -134,6 +136,10 @@ tools:
   sqlmap:
     default_args: "--batch --random-agent"
     timeout: 600
+
+  # 统一工具入口，避免 agent 重复寻找或“安装”同类工具
+  artifacts:
+    ysoserial_path: "./ysoserial-all.jar"
 
 # --- 日志配置 ---
 logging:

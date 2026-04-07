@@ -12,16 +12,30 @@ Token savings estimate:
 """
 
 import json
+import shutil
+import socket
 import time
+from urllib.parse import urlsplit, urlunsplit
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from tools.base import ToolResult
 from tools.shell import ShellTool
+from utils.capabilities import detect_tool_capabilities, summarize_tool_capabilities
 from utils.flag_parser import FlagParser
 from utils.logger import get_logger
 
 logger = get_logger("skills.engine")
+HTTP_LIKE_PORTS = {80, 443, 8080, 8443, 8888, 3000, 5000, 8000, 9090, 23333}
+
+
+def _normalize_url(url: str) -> str:
+    url = url.strip()
+    if not url:
+        return url
+    parts = urlsplit(url)
+    path = parts.path.rstrip("/") or ""
+    return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
 
 
 @dataclass
@@ -54,7 +68,7 @@ class SkillResult:
 
     def to_compact_summary(self) -> str:
         """Generate a compact summary for LLM consumption (saves tokens)"""
-        parts = [f"=== Skill [{self.skill_name}] Result ==="]
+        parts = [f"=== Skill {self.skill_name} Result ==="]
         parts.append(f"Status: {'SUCCESS' if self.success else 'PARTIAL'} ({self.steps_executed}/{self.steps_total} steps)")
 
         if self.open_ports:
@@ -100,6 +114,7 @@ class SkillEngine:
         self.shell = ShellTool(config=self.config.get("shell", {}))
         self._skills: Dict[str, Callable] = {}
         self._register_builtin_skills()
+        self._register_runtime_capability_skill()
 
     def _register_builtin_skills(self):
         """Register all built-in skills"""
@@ -115,9 +130,27 @@ class SkillEngine:
         self._skills["deep_port_scan"] = self._skill_deep_port_scan
         self._skills["java_memshell_inject"] = self._skill_java_memshell_inject
 
+    def _register_runtime_capability_skill(self) -> None:
+        capabilities = detect_tool_capabilities(config=self.config)
+        summary = summarize_tool_capabilities(capabilities).replace("'", "'\"'\"'")
+        self.register_dynamic_skill(
+            name="runtime_capabilities",
+            description=(
+                "Show the current runtime tool inventory and normalized helper artifact paths. "
+                "Use this before exploit development to avoid reinstalling duplicate tools."
+            ),
+            commands=[
+                {
+                    "cmd": f"printf '%s\\n' '{summary}'",
+                    "timeout": 5,
+                    "desc": "runtime_capabilities",
+                }
+            ],
+        )
+
     def list_skills(self) -> Dict[str, str]:
         """Return skill name -> description mapping"""
-        return {
+        skills = {
             "full_recon": "Full recon: nmap top ports + service detection + web probe + robots.txt + common dirs. Requires: target",
             "web_recon": "Web recon: homepage + headers + robots.txt + sitemap + common paths + .git + backup files. Requires: url",
             "flag_hunt": "Search entire filesystem for flags: find + grep across common locations. No params required (runs on current host)",
@@ -129,7 +162,11 @@ class SkillEngine:
             "db_enum": "Database enumeration: MySQL/PG/Redis/MongoDB unauth checks, default creds. Requires: target",
             "deep_port_scan": "Deep scan: full TCP ports + top UDP ports + vuln scripts. Requires: target",
             "java_memshell_inject": "Guidance for injecting Java Memory Shell on No-Echo vulnerabilities (Shiro/Fastjson). Requires: target, vuln_type(optional)",
+            "runtime_capabilities": "Runtime inventory of usable commands and normalized helper artifact paths. No params.",
         }
+        for name, description in self._dynamic_descriptions.items():
+            skills.setdefault(name, description)
+        return skills
 
     def execute(self, skill_name: str, **kwargs) -> SkillResult:
         """Execute a skill by name"""
@@ -142,14 +179,14 @@ class SkillEngine:
                 summary=f"Unknown skill: {skill_name}. Available: {list(self._skills.keys())}"
             )
 
-        logger.info(f"Executing skill: [{skill_name}] with params: {kwargs}")
+        logger.info(f"Executing skill: {skill_name} with params: {kwargs}")
         try:
             result = self._skills[skill_name](**kwargs)
-            logger.info(f"Skill [{skill_name}] complete: {result.steps_executed}/{result.steps_total} steps, "
+            logger.info(f"Skill {skill_name} complete: {result.steps_executed}/{result.steps_total} steps, "
                         f"{len(result.flags_found)} flags found")
             return result
         except Exception as e:
-            logger.error(f"Skill [{skill_name}] error: {str(e)}")
+            logger.error(f"Skill {skill_name} error: {str(e)}")
             return SkillResult(
                 skill_name=skill_name, success=False, steps_executed=0, steps_total=0,
                 summary=f"Skill execution error: {str(e)}"
@@ -182,8 +219,8 @@ class SkillEngine:
         self._dynamic_skills[name] = commands
         self._dynamic_descriptions[name] = description
         self._skills[name] = lambda **kw: self._run_dynamic_skill(name, **kw)
-        logger.info(f"Dynamic skill registered: [{name}] ({len(commands)} steps)")
-        return f"Skill [{name}] registered with {len(commands)} steps"
+        logger.info(f"Dynamic skill registered: {name} ({len(commands)} steps)")
+        return f"Skill {name} registered with {len(commands)} steps"
 
     def _run_dynamic_skill(self, name: str, **kwargs) -> SkillResult:
         """Execute a dynamically registered skill"""
@@ -224,6 +261,17 @@ class SkillEngine:
         """Run a shell command and return result"""
         return self.shell.execute(command=command, timeout=timeout)
 
+    def _command_available(self, name: str) -> bool:
+        return shutil.which(name) is not None
+
+    def _probe_tcp_port(self, target: str, port: int, timeout: float = 2.0) -> bool:
+        """Fast TCP connect probe used when external scanners are unavailable."""
+        try:
+            with socket.create_connection((target, port), timeout=timeout):
+                return True
+        except OSError:
+            return False
+
     def _extract_flags_from_output(self, output: str) -> List[str]:
         """Check output for flags"""
         return FlagParser.extract_flags(output)
@@ -232,6 +280,7 @@ class SkillEngine:
 
     def _skill_full_recon(self, target: str, **kwargs) -> SkillResult:
         """Full reconnaissance: port scan + service ID + web probe"""
+        explicit_port = kwargs.get("port")
         steps_total = 6
         steps_done = 0
         details = []
@@ -240,7 +289,18 @@ class SkillEngine:
         all_flags = []
 
         # Step 1: Quick nmap - top 1000 ports with service detection
-        r = self._run_cmd(f"nmap -sV -sC -T4 --open -oN /tmp/recon_{target.replace('.','_')}.txt {target}", timeout=300)
+        if self._command_available("nmap"):
+            r = self._run_cmd(
+                f"nmap -sV -sC -T4 --open -oN /tmp/recon_{target.replace('.','_')}.txt {target}",
+                timeout=300,
+            )
+        else:
+            output = "nmap unavailable; using lightweight fallback probes"
+            if explicit_port:
+                is_open = self._probe_tcp_port(target, int(explicit_port))
+                status = "open" if is_open else "closed"
+                output += f"\n{explicit_port}/tcp {status} explicit-target-port"
+            r = ToolResult(success=True, output=output, metadata={"fallback": "socket_probe"})
         steps_done += 1
         details.append({"step": "nmap_quick", "success": r.success, "output_preview": r.output[:2000]})
         result.raw_outputs["nmap_quick"] = r.output
@@ -259,10 +319,16 @@ class SkillEngine:
                     result.open_ports.append({"port": port, "proto": proto})
                     result.services.append({"port": port, "service": service, "version": version})
 
+        if explicit_port and not any(p["port"] == int(explicit_port) for p in result.open_ports):
+            if self._probe_tcp_port(target, int(explicit_port)):
+                result.open_ports.append({"port": int(explicit_port), "proto": "tcp"})
+                result.services.append({"port": int(explicit_port), "service": "unknown", "version": "explicit-port-probe"})
+                details.append({"step": "explicit_port_probe", "port": int(explicit_port), "success": True})
+
         all_flags.extend(self._extract_flags_from_output(r.output))
 
         # Step 2: Detect web ports and probe them
-        web_ports = [p["port"] for p in result.open_ports if p["port"] in [80, 443, 8080, 8443, 8888, 3000, 5000, 8000, 9090]]
+        web_ports = [p["port"] for p in result.open_ports if p["port"] in HTTP_LIKE_PORTS]
         if not web_ports and result.open_ports:
             # Try common HTTP-like services
             for s in result.services:
@@ -287,7 +353,11 @@ class SkillEngine:
                         result.vulnerabilities.append(f"Header: {line.strip()}")
 
             # Step 2b: robots.txt
-            r = self._run_cmd(f"curl -s --max-time 5 '{url}/robots.txt' 2>/dev/null", timeout=10)
+            r = self._run_cmd(
+                f"code=$(curl -s -o /tmp/autohacker_robots_$$ -w '%{{http_code}}' --max-time 5 '{url}/robots.txt' 2>/dev/null); "
+                f"if [ \"$code\" = '200' ]; then cat /tmp/autohacker_robots_$$; fi; rm -f /tmp/autohacker_robots_$$",
+                timeout=10,
+            )
             if r.success and "user-agent" in r.output.lower():
                 details.append({"step": f"robots_{wp}", "content": r.output[:500]})
                 result.interesting_files.append(f"{url}/robots.txt")
@@ -334,7 +404,13 @@ class SkillEngine:
         steps_done += 1
 
         # Step 5: OS detection hint
-        r = self._run_cmd(f"nmap -O --osscan-guess -T4 {target} 2>/dev/null | grep -E 'OS details|Running|Aggressive' | head -5", timeout=60)
+        if self._command_available("nmap"):
+            r = self._run_cmd(
+                f"nmap -O --osscan-guess -T4 {target} 2>/dev/null | grep -E 'OS details|Running|Aggressive' | head -5",
+                timeout=60,
+            )
+        else:
+            r = ToolResult(success=True, output="nmap unavailable; skipped OS detection")
         steps_done += 1
         if r.success and r.output.strip():
             details.append({"step": "os_detect", "result": r.output.strip()})
@@ -359,6 +435,7 @@ class SkillEngine:
 
     def _skill_web_recon(self, url: str, **kwargs) -> SkillResult:
         """Deep web reconnaissance on a specific URL"""
+        url = _normalize_url(url)
         result = SkillResult(skill_name="web_recon", success=True, steps_executed=0,
                              steps_total=7, summary="")
         all_flags = []
@@ -381,9 +458,13 @@ class SkillEngine:
                     result.vulnerabilities.append("Cookie without Secure flag")
 
         # 2. robots.txt
-        r = self._run_cmd(f"curl -s --max-time 5 '{url}/robots.txt' 2>/dev/null", timeout=10)
+        r = self._run_cmd(
+            f"code=$(curl -s -o /tmp/autohacker_webrecon_robots_$$ -w '%{{http_code}}' --max-time 5 '{url}/robots.txt' 2>/dev/null); "
+            f"if [ \"$code\" = '200' ]; then cat /tmp/autohacker_webrecon_robots_$$; fi; rm -f /tmp/autohacker_webrecon_robots_$$",
+            timeout=10,
+        )
         result.steps_executed += 1
-        if r.success and len(r.output) > 10 and "404" not in r.output[:50]:
+        if r.success and len(r.output) > 10 and "user-agent" in r.output.lower():
             result.interesting_files.append("robots.txt")
             result.raw_outputs["robots"] = r.output[:1000]
             all_flags.extend(self._extract_flags_from_output(r.output))
@@ -423,7 +504,7 @@ class SkillEngine:
             timeout=15
         )
         result.steps_executed += 1
-        if r.success and r.output.strip():
+        if r.success and r.output.strip() and "(command completed, no output)" not in r.output:
             techs = r.output.strip().split("\n")
             result.vulnerabilities.append(f"Tech stack: {', '.join(set(techs))}")
             result.raw_outputs["tech_stack"] = ", ".join(set(techs))
@@ -442,9 +523,12 @@ class SkillEngine:
         )
         r = self._run_cmd(admin_cmd, timeout=60)
         result.steps_executed += 1
-        if r.success and r.output.strip():
+        if r.success and r.output.strip() and "(command completed, no output)" not in r.output:
             for line in r.output.strip().split("\n"):
-                result.interesting_files.append(f"{url}{line.split(' ', 1)[-1]}")
+                parts = line.strip().split(" ", 1)
+                if len(parts) != 2 or parts[0] not in {"200", "301", "302"}:
+                    continue
+                result.interesting_files.append(f"{url}{parts[1]}")
             result.raw_outputs["admin_paths"] = r.output.strip()
         all_flags.extend(self._extract_flags_from_output(r.output))
 
@@ -662,6 +746,7 @@ class SkillEngine:
 
     def _skill_web_vuln_quick(self, url: str, **kwargs) -> SkillResult:
         """Quick web vulnerability checks"""
+        url = _normalize_url(url)
         result = SkillResult(skill_name="web_vuln_quick", success=True, steps_executed=0,
                              steps_total=5, summary="")
         all_flags = []

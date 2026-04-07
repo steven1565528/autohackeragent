@@ -1,0 +1,70 @@
+id: ext_httpx
+name: httpx HTTP 探测
+description: "使用 httpx 进行 HTTP 存活探测，返回状态码、标题、Content-Length、技术栈、IP、CDN 等信息，支持 JSON 输出"
+homepage: "https://github.com/projectdiscovery/httpx"
+category: scan
+binary: httpx
+version_cmd: "httpx -version"
+
+install:
+  go: "go install github.com/projectdiscovery/httpx/cmd/httpx@latest"
+  brew: "brew install httpx"
+  docker: "docker pull projectdiscovery/httpx:latest"
+  f8x: "-httpx"
+
+parameters:
+  - name: target
+    type: string
+    description: "探测目标 URL 或主机（可含端口）"
+    required: true
+  - name: match_codes
+    type: string
+    description: "仅匹配的 HTTP 状态码（逗号分隔，如 200,301,302,403）"
+  - name: filter_codes
+    type: string
+    description: "排除的 HTTP 状态码（逗号分隔，如 404,500）"
+  - name: threads
+    type: string
+    description: "并发线程数"
+    default: "50"
+  - name: rate_limit
+    type: string
+    description: "每秒请求速率限制"
+    default: "150"
+
+command_template: |
+  -u {{.target}}
+  -sc -cl -ct -title -td -ip -cdn
+  -t {{.threads}}
+  -rl {{.rate_limit}}
+  {{if .match_codes}}-mc {{.match_codes}}{{end}}
+  {{if .filter_codes}}-fc {{.filter_codes}}{{end}}
+  -json
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: url, path: "url" }
+      - { name: status_code, path: "status_code" }
+      - { name: title, path: "title" }
+      - { name: content_length, path: "content_length" }
+      - { name: content_type, path: "content_type" }
+      - { name: tech, path: "tech" }
+      - { name: host, path: "host" }
+      - { name: port, path: "port" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: url
+  detail_template: "[{{.status_code}}] {{.url}} - {{.title}} ({{.content_length}} bytes)"
+
+constraints:
+  timeout: 300s
+  proxy_flag: "-http-proxy"
+  max_concurrent: 2

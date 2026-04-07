@@ -1,0 +1,63 @@
+id: ext_nuclei
+name: Nuclei 漏洞扫描
+description: "使用 nuclei 基于 YAML 模板进行漏洞扫描，支持数千个 CVE、暴露检测、错误配置检测模板，零误报"
+homepage: "https://github.com/projectdiscovery/nuclei"
+category: poc
+binary: nuclei
+version_cmd: "nuclei -version"
+
+install:
+  go: "go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+  brew: "brew install nuclei"
+  docker: "docker pull projectdiscovery/nuclei:latest"
+  f8x: "-nuclei"
+
+parameters:
+  - name: target
+    type: string
+    description: "扫描目标 URL 或主机"
+    required: true
+  - name: severity
+    type: string
+    description: "严重等级过滤（逗号分隔）"
+    default: "low,medium,high,critical"
+    enum: ["info", "low", "medium", "high", "critical", "low,medium,high,critical"]
+  - name: tags
+    type: string
+    description: "模板标签过滤（如 cve, exposure, misconfig，逗号分隔）"
+  - name: templates
+    type: string
+    description: "指定模板路径或 ID（可选）"
+
+command_template: |
+  -u {{.target}}
+  -severity {{.severity}}
+  {{if .tags}}-tags {{.tags}}{{end}}
+  {{if .templates}}-t {{.templates}}{{end}}
+  {{if not .templates}}{{if not .tags}}-as{{end}}{{end}}
+  -jsonl
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: host, path: "host" }
+      - { name: template_id, path: "template-id" }
+      - { name: severity, path: "info.severity" }
+      - { name: name, path: "info.name" }
+      - { name: matched_at, path: "matched-at" }
+      - { name: type, path: "type" }
+
+findings_mapping:
+  type: vulnerability
+  severity: medium
+  target_field: host
+  detail_template: "[{{.severity}}] {{.name}} ({{.template_id}}) at {{.matched_at}}"
+
+constraints:
+  timeout: 600s
+  max_concurrent: 1

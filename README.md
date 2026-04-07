@@ -2,6 +2,18 @@
 
 **自主渗透测试智能体** — 以大语言模型（LLM）为核心的自动化渗透测试框架。
 
+## 仓库状态
+
+当前仓库已经整理为适合上传到 GitHub 和部署到 CVM 的状态：
+
+- 不提交本地环境：`.venv/`、`.env`
+- 不提交运行日志：`logs/`
+- 不提交目标记忆缓存：`state/*.json`
+- 不提交本地调试产物：`payload*.ser`
+- 不提交本地下载的大体积二进制：`ysoserial*.jar`
+
+如果你要重新下载工具或重新生成缓存，项目会在运行时自动创建对应目录或由部署脚本安装依赖。
+
 ## 📋 项目简介
 
 本项目为智能渗透比赛而构建，智能体能够：
@@ -66,19 +78,49 @@ Skills 将多步操作封装为单次调用，**节省约 65% Token**:
 | `db_enum` | 数据库探测（MySQL/Redis/Mongo/PG 未授权） | 5 步 |
 | `deep_port_scan` | 深度扫描（全 TCP+UDP+漏洞脚本） | 3 步 |
 
+## 📚 AboutSecurity 集成
+
+项目已集成只读版 `AboutSecurity` 资源库，位置在 `resources/AboutSecurity/`。
+
+- 不修改上游 `skills/**/SKILL.md`
+- 通过 `aboutsecurity` 工具浏览外部方法论、Payload、字典和文档
+- 适合在 LLM 决策前先检索相关打法，再结合现有 `skill` / `codegen` / 单工具执行
+
+常见调用方式：
+
+```json
+{"action": "aboutsecurity", "action_input": {"action": "search_skills", "query": "sql injection"}}
+{"action": "aboutsecurity", "action_input": {"action": "show_skill", "name": "sql-injection-methodology"}}
+{"action": "aboutsecurity", "action_input": {"action": "search_resources", "module": "payload", "query": "xss"}}
+```
+
 ## 🚀 快速开始
 
 ### 1. 环境准备（CVM 上执行）
 
 ```bash
-# 安装系统工具
+# 推荐：Ubuntu 24 / 8C16G / 50G 使用 full profile
 chmod +x setup_tools.sh
-./setup_tools.sh
+./setup_tools.sh --profile full
+
+# 也支持更快或更重的预装档位
+./setup_tools.sh --profile core
+./setup_tools.sh --profile max
 
 # 配置 API Key
 cp .env.example .env
 vim .env  # 填入你的 API Key
 ```
+
+### 1.1 上传到 GitHub 前建议
+
+```bash
+git status
+.venv/bin/pytest -q
+.venv/bin/python main.py --self-check
+```
+
+如果这三步正常，再推到 GitHub，会比“边传边修”稳定很多。
 
 ### 2. 配置模型
 
@@ -93,6 +135,7 @@ llm:
 
 ```bash
 # 正式比赛模式
+source .venv/bin/activate
 python3 main.py
 
 # 调试模式 - 攻击单个目标
@@ -104,6 +147,47 @@ python3 main.py --model deepseek-chat
 # 查看可用模型
 python3 main.py --list-models
 ```
+
+### 4. CVM 部署建议
+
+推荐环境：
+
+- Ubuntu 24.04
+- 8C16G
+- 50G 磁盘
+- Python 3.10+
+
+推荐部署流程：
+
+```bash
+git clone <your-repo-url>
+cd autohackeragent
+cp .env.example .env
+vim .env
+chmod +x setup_tools.sh
+./setup_tools.sh --profile full
+source .venv/bin/activate
+python3 main.py --self-check
+```
+
+如果你需要更重的工具集，再用：
+
+```bash
+./setup_tools.sh --profile max
+```
+
+如果只是先验证项目框架能不能跑起来：
+
+```bash
+./setup_tools.sh --profile core
+```
+
+### 工具能力感知
+
+Agent 启动时会自动探测当前机器上已安装的工具，并把结果注入提示词：
+- 优先使用现场已安装工具
+- 对缺失工具自动降级到可用方案
+- 减少 `command not found` 带来的步数浪费
 
 ## ⚙️ 支持的模型
 
@@ -152,3 +236,5 @@ python3 main.py --list-models
 - 每天 3 次挑战机会，零点刷新
 - 黑盒环境，无附件
 - 严禁攻击比赛平台
+- 公网云靶场默认不要猜本机私网 `LHOST`
+- 未配置公网回连地址时，优先 `check`、in-band 验证、文件/HTTP 回显验证，而不是默认 reverse payload

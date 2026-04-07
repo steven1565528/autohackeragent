@@ -1,0 +1,60 @@
+id: ext_ksubdomain
+name: KSubdomain 无状态子域名爆破
+description: "使用 ksubdomain 进行无状态子域名爆破/验证，直接操作网卡原始套接字发包，速度极快（比 dnsx 快 10 倍），支持验证和枚举两种模式"
+homepage: "https://github.com/boy-hack/ksubdomain"
+category: scan
+binary: ksubdomain
+version_cmd: "ksubdomain --version"
+
+install:
+  manual: "https://github.com/boy-hack/ksubdomain/releases"
+  f8x: "-ksub"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标域名（枚举模式）或域名列表文件路径（验证模式）"
+    required: true
+  - name: mode
+    type: string
+    description: "运行模式：enum(枚举爆破) / verify(验证存活)"
+    default: "verify"
+    enum: ["enum", "verify"]
+  - name: band
+    type: string
+    description: "带宽限制（如 5M、10M、1G）"
+    default: "5m"
+  - name: resolvers
+    type: string
+    description: "自定义 DNS 解析器文件路径"
+  - name: retry
+    type: string
+    description: "重试次数（-1 为无限重试）"
+    default: "3"
+
+command_template: |
+  {{.mode}}
+  {{if eq .mode "enum"}}-d {{.target}}{{else}}-d {{.target}}{{end}}
+  -b {{.band}}
+  {{if .resolvers}}-r {{.resolvers}}{{end}}
+  --retry {{.retry}}
+  -o {{.OutputFile}}
+  --silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+  line:
+    skip_empty: true
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: line
+  detail_template: "subdomain: {{.line}}"
+
+constraints:
+  timeout: 600s
+  max_concurrent: 1
+  requires_root: true

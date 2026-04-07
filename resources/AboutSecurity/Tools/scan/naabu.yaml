@@ -1,0 +1,61 @@
+id: ext_naabu
+name: Naabu 端口扫描
+description: "使用 naabu 进行快速 SYN/CONNECT 端口扫描，支持 IPv4/IPv6、CDN 排除、nmap 集成，轻量高效"
+homepage: "https://github.com/projectdiscovery/naabu"
+category: scan
+binary: naabu
+version_cmd: "naabu -version"
+
+install:
+  go: "go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest"
+  brew: "brew install naabu"
+  docker: "docker pull projectdiscovery/naabu:latest"
+  f8x: "-naabu"
+
+parameters:
+  - name: target
+    type: string
+    description: "扫描目标（IP、域名或 CIDR）"
+    required: true
+  - name: ports
+    type: string
+    description: "端口范围。填纯数字如 100、1000、full 表示 top-ports；填逗号/范围如 80,443 或 1-65535 表示精确端口"
+    default: "1000"
+  - name: scan_type
+    type: string
+    description: "扫描类型：s(SYN 半开) / c(CONNECT 全连接)"
+    default: "c"
+    enum: ["s", "c"]
+  - name: rate
+    type: string
+    description: "每秒发包速率"
+    default: "1000"
+
+command_template: |
+  -host {{.target}}
+  {{if or (eq .ports "100") (eq .ports "1000") (eq .ports "full")}}-top-ports {{.ports}}{{else if hasPrefix .ports "top-"}}-top-ports {{trimPrefix .ports "top-"}}{{else}}-p {{.ports}}{{end}}
+  -s {{.scan_type}}
+  -rate {{.rate}}
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+  line:
+    skip_empty: true
+    split: ":"
+    fields:
+      - { name: host, index: 0 }
+      - { name: port, index: 1 }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: host
+  detail_template: "{{.host}}:{{.port}} open"
+
+constraints:
+  timeout: 300s
+  max_concurrent: 2

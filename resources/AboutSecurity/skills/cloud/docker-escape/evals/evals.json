@@ -1,0 +1,20 @@
+{
+  "skill_name": "docker-escape",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我在 Docker 容器里，cat /proc/1/status 显示 CapEff 是 0000003fffffffff，怎么逃逸？",
+      "expected_output": "特权容器，挂载宿主机磁盘 mount /dev/sda1 到临时目录，读取 flag 或写 SSH 密钥/crontab"
+    },
+    {
+      "id": 2,
+      "prompt": "容器内发现 /var/run/docker.sock 存在但没有 docker 命令，如何利用？",
+      "expected_output": "使用 curl 通过 unix socket 操作 Docker API，创建挂载宿主机的特权容器"
+    },
+    {
+      "id": 3,
+      "prompt": "在容器里面，不是特权容器，没有 docker.sock，uname -r 显示 5.10.0，有什么逃逸方法？",
+      "expected_output": "检查 capabilities、挂载点、hostPID/hostNetwork，尝试内核漏洞（DirtyPipe 5.8-5.16）"
+    }
+  ]
+}

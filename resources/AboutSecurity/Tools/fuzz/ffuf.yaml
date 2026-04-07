@@ -1,0 +1,100 @@
+id: ext_ffuf
+name: ffuf Web Fuzzer
+description: "使用 ffuf 进行 Web 模糊测试，支持目录发现、参数爆破、VHost 枚举，自动校准过滤，JSON 输出"
+homepage: "https://github.com/ffuf/ffuf"
+category: fuzz
+binary: ffuf
+version_cmd: "ffuf -V"
+
+install:
+  go: "go install github.com/ffuf/ffuf/v2@latest"
+  brew: "brew install ffuf"
+  f8x: "-ffuf"
+
+parameters:
+  - name: url
+    type: string
+    description: "目标 URL，使用 FUZZ 关键字标记模糊位置（如 https://target/FUZZ）"
+    required: true
+  - name: wordlist
+    type: string
+    description: "字典文件路径。可使用绝对路径、或相对于 Dic 目录的相对路径（如 Web/Directory/php/Fuzz_php.txt）。留空则自动使用通用目录字典。"
+    required: false
+    default: "{{.DicDir}}/Web/Directory/Fuzz_common.txt"
+  - name: method
+    type: string
+    description: "HTTP 请求方法"
+    default: "GET"
+    enum: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+  - name: match_codes
+    type: string
+    description: "匹配的 HTTP 状态码（逗号分隔，如 200,301,302,403）"
+    default: "200-299,301,302,307,401,403,405,500"
+  - name: filter_codes
+    type: string
+    description: "过滤的 HTTP 状态码（逗号分隔，如 404）"
+  - name: filter_size
+    type: string
+    description: "过滤的响应大小（逗号分隔）"
+  - name: extensions
+    type: string
+    description: "扩展名列表（逗号分隔，如 php,html,js,txt）"
+  - name: threads
+    type: string
+    description: "并发线程数"
+    default: "40"
+  - name: auto_calibrate
+    type: string
+    description: "是否启用自动校准过滤（true/false）"
+    default: "true"
+    enum: ["true", "false"]
+  - name: recursion
+    type: string
+    description: "是否递归扫描（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: recursion_depth
+    type: string
+    description: "递归深度（仅 recursion=true 时有效）"
+    default: "2"
+
+command_template: |
+  -u {{.url}}
+  -w {{.wordlist}}
+  -X {{.method}}
+  -mc {{.match_codes}}
+  {{if .filter_codes}}-fc {{.filter_codes}}{{end}}
+  {{if .filter_size}}-fs {{.filter_size}}{{end}}
+  {{if .extensions}}-e {{.extensions}}{{end}}
+  -t {{.threads}}
+  {{if eq .auto_calibrate "true"}}-ac{{end}}
+  {{if eq .recursion "true"}}-recursion -recursion-depth {{.recursion_depth}}{{end}}
+  -json
+  -o {{.OutputFile}}
+  -s
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: url, path: "url" }
+      - { name: status, path: "status" }
+      - { name: length, path: "length" }
+      - { name: words, path: "words" }
+      - { name: lines, path: "lines" }
+      - { name: content_type, path: "content-type" }
+      - { name: redirectlocation, path: "redirectlocation" }
+      - { name: input, path: "input.FUZZ" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: url
+  detail_template: "[{{.status}}] {{.url}} (size:{{.length}}, words:{{.words}})"
+
+constraints:
+  timeout: 300s
+  proxy_flag: "-x"
+  max_concurrent: 2

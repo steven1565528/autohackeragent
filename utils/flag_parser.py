@@ -10,16 +10,31 @@ logger = get_logger(__name__)
 class FlagParser:
     FLAG_PATTERN = re.compile(r"flag\{[a-zA-Z0-9_\-!@#$%^&*()+=,./?;:'\"><\[\]{}|\\~`]+\}", re.IGNORECASE)
     FLAG_PATTERN_LOOSE = re.compile(r"flag\{.+?\}", re.IGNORECASE | re.DOTALL)
+    PLACEHOLDER_TOKENS = {"...", "…", "xxx", "your_flag_here"}
+
+    @classmethod
+    def _is_placeholder_flag(cls, flag: str) -> bool:
+        lowered = flag.strip().lower()
+        if lowered in {"flag{...}", "flag{…}", "flag{xxx}", "flag{your_flag_here}"}:
+            return True
+        content = lowered[5:-1].strip() if lowered.startswith("flag{") and lowered.endswith("}") else ""
+        if not content:
+            return True
+        if "..." in content or "…" in content:
+            return True
+        return content in cls.PLACEHOLDER_TOKENS
 
     @classmethod
     def extract_flags(cls, text: str) -> List[str]:
         flags = set()
         for match in cls.FLAG_PATTERN.finditer(text):
-            flags.add(match.group())
+            flag = match.group()
+            if cls.validate_flag(flag):
+                flags.add(flag)
         if not flags:
             for match in cls.FLAG_PATTERN_LOOSE.finditer(text):
                 flag = match.group()
-                if "\n" not in flag and len(flag) < 200:
+                if "\n" not in flag and len(flag) < 200 and cls.validate_flag(flag):
                     flags.add(flag)
         result = list(flags)
         if result:
@@ -33,7 +48,7 @@ class FlagParser:
 
     @classmethod
     def contains_flag(cls, text: str) -> bool:
-        return bool(cls.FLAG_PATTERN.search(text) or cls.FLAG_PATTERN_LOOSE.search(text))
+        return bool(cls.extract_flags(text))
 
     @classmethod
     def validate_flag(cls, flag: str) -> bool:
@@ -45,5 +60,9 @@ class FlagParser:
             return False
         content = flag[5:-1]
         if len(content) < 1 or len(content) > 128:
+            return False
+        if "\n" in content:
+            return False
+        if cls._is_placeholder_flag(flag):
             return False
         return True

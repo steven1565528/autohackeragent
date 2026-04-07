@@ -1,0 +1,56 @@
+id: ext_uncover
+name: Uncover 搜索引擎聚合
+description: "使用 uncover 聚合查询 Shodan/Censys/FOFA/Hunter/Quake/ZoomEye 等搜索引擎，快速发现暴露资产"
+homepage: "https://github.com/projectdiscovery/uncover"
+category: osint
+binary: uncover
+version_cmd: "uncover -version"
+
+install:
+  go: "go install github.com/projectdiscovery/uncover/cmd/uncover@latest"
+  docker: "docker pull projectdiscovery/uncover:latest"
+
+parameters:
+  - name: query
+    type: string
+    description: "搜索查询语句（语法取决于所选引擎）"
+    required: true
+  - name: engine
+    type: string
+    description: "搜索引擎（逗号分隔，可多选）"
+    default: "shodan"
+    enum: ["shodan", "censys", "fofa", "hunter", "quake", "zoomeye", "netlas", "criminalip", "shodan,censys,fofa"]
+  - name: limit
+    type: string
+    description: "每个引擎返回的最大结果数"
+    default: "100"
+
+command_template: |
+  -q "{{.query}}"
+  -e {{.engine}}
+  -l {{.limit}}
+  -json
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: host, path: "host" }
+      - { name: ip, path: "ip" }
+      - { name: port, path: "port" }
+      - { name: url, path: "url" }
+      - { name: source, path: "source" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: host
+  detail_template: "{{.ip}}:{{.port}} ({{.source}}) {{.url}}"
+
+constraints:
+  timeout: 120s
+  max_concurrent: 2

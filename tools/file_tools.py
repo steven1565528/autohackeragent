@@ -128,12 +128,12 @@ class FileSearchTool(BaseTool):
         if not pattern:
             return ToolResult(success=False, output="", error="Pattern required")
         if action == "find":
-            cmd = f"find '{path}' -name '{pattern}' -type f 2>/dev/null | head -100"
+            extra = f" {args.strip()}" if args and args.strip() else ""
+            cmd = f"find '{path}'{extra} -name '{pattern}' -type f 2>/dev/null | head -100"
         elif action == "grep":
             r_flag = "-r" if recursive else ""
-            cmd = f"grep -n {r_flag} -i '{pattern}' '{path}' 2>/dev/null | head -100"
+            extra = f" {args.strip()}" if args and args.strip() else ""
+            cmd = f"grep -n {r_flag} -i '{pattern}' '{path}'{extra} 2>/dev/null | head -100"
         else:
             return ToolResult(success=False, output="", error=f"Unknown action: {action}")
-        if args:
-            cmd += f" {args}"
         return self.shell.execute(command=cmd, timeout=60)

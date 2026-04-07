@@ -13,9 +13,6 @@ pydantic>=2.7.0
 pyyaml>=6.0.1
 python-dotenv>=1.0.1
 
-# 异步支持
-asyncio-subprocess>=0.2.0
-
 # 日志增强
 rich>=13.7.0
 

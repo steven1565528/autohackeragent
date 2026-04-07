@@ -1,11 +1,16 @@
 """Web pentesting tools: curl, directory scan, nikto"""
 
+import shutil
 from typing import Any, Dict
 from tools.base import BaseTool, ToolResult
 from tools.shell import ShellTool
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _normalize_base_url(url: str) -> str:
+    return url.rstrip("/")
 
 
 class CurlTool(BaseTool):
@@ -94,12 +99,32 @@ class DirScanTool(BaseTool):
         args = kwargs.get("args", "")
         if not url:
             return ToolResult(success=False, output="", error="URL required")
-        if tool == "gobuster":
+        url = _normalize_base_url(url)
+        requested_tool = tool
+        if tool == "gobuster" and shutil.which("gobuster"):
             cmd = ["gobuster", "dir", "-u", url, "-w", wordlist, "-q", "--no-error"]
             if extensions:
                 cmd.extend(["-x", extensions])
-        else:
+        elif tool == "dirb" and shutil.which("dirb"):
             cmd = ["dirb", url, wordlist, "-S"]
+        else:
+            # Capability-aware fallback: keep scanning instead of failing on missing tools.
+            common_paths = [
+                "/", "/admin", "/login", "/manager", "/console", "/dashboard",
+                "/api", "/robots.txt", "/sitemap.xml", "/.git/HEAD", "/.env",
+            ]
+            probe = (
+                "for path in " + " ".join(common_paths) + "; do "
+                f"code=$(curl -s -o /dev/null -w '%{{http_code}}' --max-time 3 '{url}$path' 2>/dev/null); "
+                "if [ \"$code\" = '200' ] || [ \"$code\" = '301' ] || [ \"$code\" = '302' ] || [ \"$code\" = '403' ]; then "
+                "echo \"$code $path\"; fi; done"
+            )
+            result = self.shell.execute(command=probe, timeout=45)
+            if result.success and result.output.strip():
+                result.output = f"[fallback: {requested_tool} unavailable]\n" + result.output
+            elif not result.output:
+                result.output = f"[fallback: {requested_tool} unavailable]\n(no interesting paths found)"
+            return result
         if args:
             cmd.append(args)
         return self.shell.execute(command=" ".join(cmd), timeout=300)
@@ -134,6 +159,14 @@ class NiktoTool(BaseTool):
         args = kwargs.get("args", "")
         if not target:
             return ToolResult(success=False, output="", error="Target required")
+        if not shutil.which("nikto"):
+            fallback = self.shell.execute(
+                command=f"curl -s -i -L --max-time 10 '{target}' 2>/dev/null | head -200",
+                timeout=20,
+            )
+            if fallback.success:
+                fallback.output = "[fallback: nikto unavailable]\n" + fallback.output
+            return fallback
         cmd = ["nikto", "-h", target, "-nointeractive"]
         if args:
             cmd.append(args)

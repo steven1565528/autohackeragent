@@ -1,0 +1,72 @@
+id: ext_nerva
+name: Nerva 服务指纹识别
+description: "使用 nerva 进行高性能服务指纹识别，支持 120+ 协议（数据库、远程访问、消息队列、工控、Web 等），TCP/UDP/SCTP 多传输层，丰富元数据提取"
+homepage: "https://github.com/praetorian-inc/nerva"
+category: scan
+binary: nerva
+version_cmd: "nerva --version"
+
+install:
+  go: "go install github.com/praetorian-inc/nerva/cmd/nerva@latest"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标 HOST:PORT（逗号分隔多个，如 192.168.1.1:80,192.168.1.1:22）"
+    required: true
+  - name: fast
+    type: string
+    description: "是否启用快速模式（仅扫描端口默认服务，true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: udp
+    type: string
+    description: "是否运行 UDP 插件（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: timeout
+    type: string
+    description: "超时毫秒数"
+    default: "2000"
+  - name: workers
+    type: string
+    description: "并发扫描 worker 数"
+    default: "50"
+  - name: rate_limit
+    type: string
+    description: "全局每秒最大扫描数（0=不限）"
+    default: "0"
+
+command_template: |
+  -t {{.target}}
+  {{if eq .fast "true"}}--fast{{end}}
+  {{if eq .udp "true"}}-U{{end}}
+  -w {{.timeout}}
+  -W {{.workers}}
+  {{if ne .rate_limit "0"}}-R {{.rate_limit}}{{end}}
+  --json
+  -o {{.OutputFile}}
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: host, path: "host" }
+      - { name: ip, path: "ip" }
+      - { name: port, path: "port" }
+      - { name: protocol, path: "protocol" }
+      - { name: transport, path: "transport" }
+      - { name: tls, path: "tls" }
+      - { name: metadata, path: "metadata" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: host
+  detail_template: "{{.protocol}}://{{.ip}}:{{.port}} ({{.transport}})"
+
+constraints:
+  timeout: 300s
+  max_concurrent: 3

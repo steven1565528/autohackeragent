@@ -1,0 +1,47 @@
+id: ext_dirsearch
+name: Dirsearch 目录扫描
+description: "使用 dirsearch 进行 Web 目录和文件暴力枚举"
+homepage: "https://github.com/maurosoria/dirsearch"
+category: brute
+binary: dirsearch
+version_cmd: "dirsearch --version"
+
+install:
+  pip: "pip3 install dirsearch"
+  docker: "docker pull maurosoria/dirsearch"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标 URL（如 http://example.com）"
+    required: true
+  - name: extensions
+    type: string
+    description: "扩展名列表，逗号分隔"
+    default: "php,asp,aspx,jsp,html,js"
+  - name: wordlist
+    type: string
+    description: "字典路径。可使用绝对路径、或相对于 Dic 目录的相对路径（如 Web/Directory/php/Fuzz_php.txt）。留空使用 dirsearch 内置字典。"
+
+command_template: |
+  -u {{.target}}
+  {{if .wordlist}}-w {{.wordlist}}{{end}}
+  -e {{.extensions}}
+  --format plain
+  -o {{.OutputFile}}
+  --quiet
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: target
+  detail_template: "discovered path: {{.target}}"
+
+constraints:
+  timeout: 300s
+  max_concurrent: 2

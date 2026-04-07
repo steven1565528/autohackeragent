@@ -1,0 +1,30 @@
+version: "1.0.0"
+min_kitsune_version: "3.2.2"
+description: "AboutSecurity 资源库 — 统一安全资源中心"
+updated: "2026-03-20"
+
+modules:
+  dic:
+    path: Dic/
+    description: "认证/网络/端口/正则/Web 字典库"
+  payload:
+    path: Payload/
+    description: "XSS/SQLi/SSRF/XXE/LFI 等 Payload 库"
+  skills:
+    path: Skills/
+    description: "AI Agent 技能剧本 (Playbook) 库"
+    categories:
+      - recon
+      - exploit
+      - postexploit
+      - lateral
+      - cloud
+      - general
+  tools:
+    path: Tools/
+    description: "外部工具声明式配置 (YAML) 库"
+    categories:
+      - scan
+      - fuzz
+      - poc
+      - osint

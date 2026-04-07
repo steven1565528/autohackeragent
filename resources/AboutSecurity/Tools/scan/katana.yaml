@@ -1,0 +1,70 @@
+id: ext_katana
+name: Katana Web 爬虫
+description: "使用 katana 进行 Web 爬取，支持标准和无头浏览器模式，自动 JavaScript 解析，提取 URL/表单/XHR 请求"
+homepage: "https://github.com/projectdiscovery/katana"
+category: scan
+binary: katana
+version_cmd: "katana -version"
+
+install:
+  go: "CGO_ENABLED=1 go install github.com/projectdiscovery/katana/cmd/katana@latest"
+  brew: "brew install katana"
+  docker: "docker pull projectdiscovery/katana:latest"
+  f8x: "-katana"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标 URL"
+    required: true
+  - name: depth
+    type: string
+    description: "爬取深度"
+    default: "3"
+  - name: js_crawl
+    type: string
+    description: "是否解析 JavaScript 文件中的端点（true/false）"
+    default: "true"
+    enum: ["true", "false"]
+  - name: headless
+    type: string
+    description: "是否启用无头浏览器模式（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: strategy
+    type: string
+    description: "爬取策略"
+    default: "depth-first"
+    enum: ["depth-first", "breadth-first"]
+
+command_template: |
+  -u {{.target}}
+  -d {{.depth}}
+  -s {{.strategy}}
+  {{if eq .js_crawl "true"}}-jc{{end}}
+  {{if eq .headless "true"}}-hl -sc{{end}}
+  -jsonl
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: url, path: "request.endpoint" }
+      - { name: method, path: "request.method" }
+      - { name: source, path: "request.source" }
+      - { name: tag, path: "request.tag" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: url
+  detail_template: "[{{.method}}] {{.url}} (source: {{.source}})"
+
+constraints:
+  timeout: 600s
+  proxy_flag: "-proxy"
+  max_concurrent: 1

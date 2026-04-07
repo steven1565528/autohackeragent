@@ -5,12 +5,16 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.venv/
+venv/
 
 # 环境变量（含 API Key，切勿提交！）
 .env
 
 # 日志
 logs/
+state/*.json
 
 # IDE
 .vscode/
@@ -20,3 +24,15 @@ logs/
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# 本地调试/临时工件
+payload*.ser
+*.log
+lt_out.txt
+lt_err.txt
+pytest_out.txt
+test_out.txt
+test_out_utf8.txt
+
+# 本地下载的大体积 exploit 工具
+ysoserial*.jar

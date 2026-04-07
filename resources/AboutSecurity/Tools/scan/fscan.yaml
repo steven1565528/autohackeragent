@@ -1,0 +1,84 @@
+id: ext_fscan
+name: fscan 内网综合扫描
+description: "使用 fscan 进行内网综合扫描，集成主机存活探测、端口扫描、服务爆破、漏洞检测（MS17-010 等）、Web 指纹识别、POC 扫描"
+homepage: "https://github.com/shadow1ng/fscan"
+category: scan
+binary: fscan
+version_cmd: "fscan >&1 | head -1"
+
+install:
+  manual: "https://github.com/shadow1ng/fscan/releases"
+  f8x: "-fscan"
+
+parameters:
+  - name: target
+    type: string
+    description: "扫描目标（IP/CIDR/IP 范围，如 192.168.1.1/24）"
+    required: true
+  - name: ports
+    type: string
+    description: "端口范围（如 22,80,443,3306 或 1-65535）"
+    default: "21,22,80,81,135,139,443,445,1433,1521,3306,5432,6379,7001,8000,8080,8089,9000,9200,11211,27017"
+  - name: module
+    type: string
+    description: "扫描模块"
+    default: "all"
+    enum: ["all", "ssh", "smb", "rdp", "mysql", "mssql", "redis", "psql", "oracle", "ftp", "ms17010", "netbios", "web", "icmp"]
+  - name: threads
+    type: string
+    description: "扫描线程数"
+    default: "600"
+  - name: timeout
+    type: string
+    description: "超时秒数"
+    default: "3"
+  - name: no_brute
+    type: string
+    description: "是否禁用爆破（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: no_poc
+    type: string
+    description: "是否禁用 Web POC 扫描（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: user
+    type: string
+    description: "指定用户名（用于爆破模块）"
+  - name: password
+    type: string
+    description: "指定密码（用于爆破模块）"
+
+command_template: |
+  -h {{.target}}
+  -p {{.ports}}
+  -m {{.module}}
+  -t {{.threads}}
+  -time {{.timeout}}
+  {{if eq .no_brute "true"}}-nobr{{end}}
+  {{if eq .no_poc "true"}}-nopoc{{end}}
+  {{if .user}}-user {{.user}}{{end}}
+  {{if .password}}-pwd {{.password}}{{end}}
+  -o {{.OutputFile}}
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+  line:
+    skip_empty: true
+    regex: "^\\[([+*!])\\]\\s+(.+)$"
+    fields:
+      - { name: level, group: 1 }
+      - { name: detail, group: 2 }
+
+findings_mapping:
+  type: vulnerability
+  severity: medium
+  target_field: detail
+  detail_template: "[{{.level}}] {{.detail}}"
+
+constraints:
+  timeout: 1200s
+  proxy_flag: "-socks5"
+  max_concurrent: 1

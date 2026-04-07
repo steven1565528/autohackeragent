@@ -1,0 +1,60 @@
+id: ext_masscan
+name: Masscan 高速端口扫描
+description: "使用 masscan 进行大规模高速端口扫描，适合大范围 CIDR 目标"
+homepage: "https://github.com/robertdavidgraham/masscan"
+category: scan
+binary: masscan
+version_cmd: "masscan --version"
+
+install:
+  brew: "brew install masscan"
+  apt: "sudo apt install -y masscan"
+  manual: "https://github.com/robertdavidgraham/masscan/releases"
+
+parameters:
+  - name: target
+    type: string
+    description: "扫描目标（IP 或 CIDR）"
+    required: true
+  - name: ports
+    type: string
+    description: "端口范围"
+    default: "1-65535"
+  - name: rate
+    type: string
+    description: "扫描速率 (packets/sec)"
+    default: "10000"
+
+command_template: |
+  -p{{.ports}}
+  --rate {{.rate}}
+  -oL {{.OutputFile}}
+  {{.target}}
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+  line:
+    skip_prefix: "#"
+    split: " "
+    fields:
+      - name: status
+        index: 0
+      - name: proto
+        index: 1
+      - name: port
+        index: 2
+      - name: host
+        index: 3
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: host
+  detail_template: "{{.host}}:{{.port}}/{{.proto}} {{.status}}"
+
+constraints:
+  timeout: 600s
+  requires_root: true
+  max_concurrent: 1

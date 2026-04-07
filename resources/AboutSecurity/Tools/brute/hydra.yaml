@@ -1,0 +1,78 @@
+id: ext_hydra
+name: Hydra 暴力破解
+description: "使用 THC-Hydra 进行在线密码暴力破解，支持 50+ 协议（SSH/FTP/HTTP/SMB/RDP/MySQL/MSSQL/POP3/SMTP 等），支持密码喷洒和凭据填充"
+homepage: "https://github.com/vanhauser-thc/thc-hydra"
+category: brute
+binary: hydra
+version_cmd: "hydra -V 2>&1 | head -1"
+
+install:
+  brew: "brew install hydra"
+  apt: "sudo apt install hydra"
+  manual: "https://github.com/vanhauser-thc/thc-hydra#readme"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标地址（IP 或域名）"
+    required: true
+  - name: service
+    type: string
+    description: "目标服务/协议"
+    required: true
+    enum: ["ssh", "ftp", "http-get", "http-post-form", "https-get", "https-post-form", "smb", "rdp", "mysql", "mssql", "pop3", "smtp", "telnet", "vnc", "ldap2", "ldap3", "snmp", "oracle-listener", "postgres"]
+  - name: port
+    type: string
+    description: "目标端口（留空使用默认端口）"
+  - name: user
+    type: string
+    description: "单个用户名"
+  - name: user_list
+    type: string
+    description: "用户名字典文件路径"
+  - name: password
+    type: string
+    description: "单个密码"
+  - name: pass_list
+    type: string
+    description: "密码字典文件路径"
+  - name: threads
+    type: string
+    description: "并发线程数"
+    default: "16"
+  - name: http_path
+    type: string
+    description: "HTTP 表单路径和参数（http-post-form 时使用，格式: /login:user=^USER^&pass=^PASS^:F=incorrect）"
+  - name: extra_args
+    type: string
+    description: "其他额外参数"
+
+command_template: |
+  {{if .user}}-l "{{.user}}"{{end}}
+  {{if .user_list}}-L {{.user_list}}{{end}}
+  {{if .password}}-p "{{.password}}"{{end}}
+  {{if .pass_list}}-P {{.pass_list}}{{end}}
+  -t {{.threads}}
+  {{if .port}}-s {{.port}}{{end}}
+  -o {{.OutputFile}}
+  {{if .extra_args}}{{.extra_args}}{{end}}
+  {{.target}}
+  {{if .http_path}}{{.service}} "{{.http_path}}"{{else}}{{.service}}{{end}}
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+  line:
+    skip_empty: true
+    skip_prefix: ["#", "Hydra"]
+
+findings_mapping:
+  type: credential
+  severity: critical
+  target_field: target
+  detail_template: "Credential found via Hydra brute force"
+
+constraints:
+  timeout: 900s
+  max_concurrent: 1

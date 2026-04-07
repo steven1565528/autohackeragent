@@ -1,0 +1,56 @@
+id: ext_subfinder
+name: Subfinder 子域名发现
+description: "使用 subfinder 进行被动子域名枚举，支持多种在线数据源（Shodan、Censys、SecurityTrails 等），快速隐蔽"
+homepage: "https://github.com/projectdiscovery/subfinder"
+category: scan
+binary: subfinder
+version_cmd: "subfinder -version"
+
+install:
+  go: "go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+  brew: "brew install subfinder"
+  docker: "docker pull projectdiscovery/subfinder:latest"
+  f8x: "-subfinder"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标域名"
+    required: true
+  - name: sources
+    type: string
+    description: "指定数据源（逗号分隔，如 crtsh,github,shodan）"
+  - name: all
+    type: string
+    description: "是否使用全部数据源（true/false，较慢但更全面）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: timeout
+    type: string
+    description: "每个域名的超时秒数"
+    default: "30"
+
+command_template: |
+  -d {{.target}}
+  {{if eq .all "true"}}-all{{end}}
+  {{if .sources}}-s {{.sources}}{{end}}
+  -timeout {{.timeout}}
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+  line:
+    skip_empty: true
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: line
+  detail_template: "subdomain: {{.line}}"
+
+constraints:
+  timeout: 600s
+  max_concurrent: 3

@@ -75,7 +75,7 @@ class SkillTool(BaseTool):
                 error=f"Skill name required. Available: {list(self.engine.list_skills().keys())}"
             )
 
-        logger.info(f"Skill invoked: [{skill_name}] params={kwargs}")
+        logger.info(f"Skill invoked: {skill_name} params={kwargs}")
         result = self.engine.execute(skill_name, **kwargs)
 
         # Convert SkillResult to ToolResult with compact summary

@@ -1,0 +1,68 @@
+id: ext_gau
+name: gau URL 历史收集
+description: "使用 gau (getallurls) 从 Wayback Machine、Common Crawl、OTX、URLScan 收集目标域名的已知 URL，用于攻击面发现"
+homepage: "https://github.com/lc/gau"
+category: osint
+binary: gau
+version_cmd: "gau --version"
+
+install:
+  go: "go install github.com/lc/gau/v2/cmd/gau@latest"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标域名"
+    required: true
+  - name: providers
+    type: string
+    description: "数据源（逗号分隔）"
+    default: "wayback,commoncrawl,otx,urlscan"
+    enum: ["wayback,commoncrawl,otx,urlscan", "wayback", "commoncrawl", "otx", "urlscan"]
+  - name: blacklist
+    type: string
+    description: "排除的文件扩展名（逗号分隔，如 png,jpg,gif,svg,woff,ttf）"
+    default: "png,jpg,gif,svg,woff,ttf,ico,css"
+  - name: threads
+    type: string
+    description: "并发线程数"
+    default: "5"
+  - name: subs
+    type: string
+    description: "是否包含子域名（true/false）"
+    default: "true"
+    enum: ["true", "false"]
+  - name: from
+    type: string
+    description: "起始日期（格式 YYYYMM，如 202301）"
+  - name: to
+    type: string
+    description: "结束日期（格式 YYYYMM，如 202612）"
+
+command_template: |
+  {{.target}}
+  --providers {{.providers}}
+  --blacklist {{.blacklist}}
+  --threads {{.threads}}
+  {{if eq .subs "true"}}--subs{{end}}
+  {{if .from}}--from {{.from}}{{end}}
+  {{if .to}}--to {{.to}}{{end}}
+  --o {{.OutputFile}}
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+  line:
+    skip_empty: true
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: line
+  detail_template: "url: {{.line}}"
+
+constraints:
+  timeout: 600s
+  proxy_flag: "--proxy"
+  max_concurrent: 2

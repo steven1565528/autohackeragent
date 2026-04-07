@@ -1,0 +1,53 @@
+id: ext_nmap_scan
+name: Nmap 端口扫描
+description: "使用 nmap 执行端口扫描，支持 SYN/TCP/UDP 多种模式，比内置 naabu 更精细"
+homepage: "https://nmap.org"
+category: scan
+binary: nmap
+version_cmd: "nmap --version"
+
+install:
+  brew: "brew install nmap"
+  apt: "sudo apt install -y nmap"
+  f8x: "-nmap"
+
+parameters:
+  - name: target
+    type: string
+    description: "扫描目标（IP、域名或 CIDR）"
+    required: true
+  - name: ports
+    type: string
+    description: "端口范围，如 1-1000 或 80,443,8080"
+    default: "1-10000"
+  - name: scan_type
+    type: string
+    description: "扫描类型：syn(快速半开) / tcp(全连接) / udp"
+    default: "syn"
+    enum: ["syn", "tcp", "udp"]
+
+command_template: |
+  {{if eq .scan_type "syn"}}-sS{{else if eq .scan_type "udp"}}-sU{{else}}-sT{{end}}
+  -p {{.ports}}
+  -oG {{.OutputFile}}
+  --open
+  {{.target}}
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: grepable
+  grepable:
+    host_regex: 'Host:\s+(\S+)'
+    port_regex: '(\d+)/open'
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: host
+  detail_template: "{{.host}}:{{.port}} open"
+
+constraints:
+  timeout: 300s
+  requires_root: false
+  max_concurrent: 2

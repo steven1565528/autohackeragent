@@ -1,0 +1,66 @@
+id: ext_dnsx
+name: dnsx DNS 查询
+description: "使用 dnsx 进行批量 DNS 记录查询和解析，支持 A/AAAA/CNAME/NS/MX/TXT/SOA 等记录类型，自动通配符过滤"
+homepage: "https://github.com/projectdiscovery/dnsx"
+category: scan
+binary: dnsx
+version_cmd: "dnsx -version"
+
+install:
+  go: "go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+  docker: "docker pull projectdiscovery/dnsx:latest"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标域名或子域名"
+    required: true
+  - name: record_type
+    type: string
+    description: "查询的 DNS 记录类型"
+    default: "a"
+    enum: ["a", "aaaa", "cname", "ns", "txt", "mx", "ptr", "soa", "any", "recon"]
+  - name: threads
+    type: string
+    description: "并发线程数"
+    default: "100"
+  - name: resolvers
+    type: string
+    description: "自定义 DNS 解析器（逗号分隔，如 8.8.8.8,1.1.1.1）"
+
+command_template: |
+  -d {{.target}}
+  {{if eq .record_type "recon"}}-recon{{else}}-{{.record_type}}{{end}}
+  -re
+  -t {{.threads}}
+  {{if .resolvers}}-r {{.resolvers}}{{end}}
+  -json
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: host, path: "host" }
+      - { name: resolver, path: "resolver" }
+      - { name: a, path: "a" }
+      - { name: aaaa, path: "aaaa" }
+      - { name: cname, path: "cname" }
+      - { name: mx, path: "mx" }
+      - { name: ns, path: "ns" }
+      - { name: txt, path: "txt" }
+      - { name: soa, path: "soa" }
+      - { name: status_code, path: "status_code" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: host
+  detail_template: "{{.host}} → A:{{.a}} CNAME:{{.cname}}"
+
+constraints:
+  timeout: 300s
+  max_concurrent: 3

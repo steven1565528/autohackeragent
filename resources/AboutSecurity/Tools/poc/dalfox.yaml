@@ -1,0 +1,86 @@
+id: ext_dalfox
+name: DalFox XSS 扫描
+description: "使用 DalFox 进行 XSS 漏洞扫描，支持反射型/存储型/DOM XSS 检测，参数分析，WAF 绕过，自动生成 PoC"
+homepage: "https://github.com/hahwul/dalfox"
+category: poc
+binary: dalfox
+version_cmd: "dalfox version"
+
+install:
+  go: "go install github.com/hahwul/dalfox/v2@latest"
+  brew: "brew install dalfox"
+  snap: "sudo snap install dalfox"
+
+parameters:
+  - name: url
+    type: string
+    description: "目标 URL（含参数），如 http://target.com/search?q=test"
+    required: true
+  - name: mode
+    type: string
+    description: "扫描模式"
+    default: "url"
+    enum: ["url", "sxss"]
+  - name: blind
+    type: string
+    description: "Blind XSS 回调地址（如 https://your-callback.xss.ht）"
+  - name: custom_payload
+    type: string
+    description: "自定义 payload 文件路径"
+  - name: waf_evasion
+    type: string
+    description: "启用 WAF 绕过（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: cookie
+    type: string
+    description: "Cookie 字符串"
+  - name: header
+    type: string
+    description: "自定义请求头（格式: Header: Value）"
+  - name: data
+    type: string
+    description: "POST 数据（使用 POST 模式时）"
+  - name: mining_dom
+    type: string
+    description: "启用 DOM 分析（true/false）"
+    default: "true"
+    enum: ["true", "false"]
+
+command_template: |
+  {{.mode}} "{{.url}}"
+  {{if .blind}}--blind "{{.blind}}"{{end}}
+  {{if .custom_payload}}--custom-payload {{.custom_payload}}{{end}}
+  {{if eq .waf_evasion "true"}}--waf-evasion{{end}}
+  {{if .cookie}}--cookie "{{.cookie}}"{{end}}
+  {{if .header}}--header "{{.header}}"{{end}}
+  {{if .data}}--data "{{.data}}"{{end}}
+  {{if eq .mining_dom "true"}}--mining-dom{{end}}
+  --format json
+  --output {{.OutputFile}}
+  --silence
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: type, path: "type" }
+      - { name: inject_type, path: "inject_type" }
+      - { name: poc_type, path: "poc_type" }
+      - { name: method, path: "method" }
+      - { name: param, path: "param" }
+      - { name: payload, path: "payload" }
+      - { name: evidence, path: "evidence" }
+
+findings_mapping:
+  type: vulnerability
+  severity: high
+  target_field: url
+  detail_template: "[XSS] {{.inject_type}} via {{.param}} — payload: {{.payload}}"
+
+constraints:
+  timeout: 300s
+  proxy_flag: "--proxy"
+  max_concurrent: 2

@@ -1,0 +1,67 @@
+id: ext_tlsx
+name: tlsx TLS 探测
+description: "使用 tlsx 进行 TLS 证书和配置分析，提取 SAN/CN、TLS 版本、加密套件、JARM/JA3 指纹，检测证书错误配置"
+homepage: "https://github.com/projectdiscovery/tlsx"
+category: scan
+binary: tlsx
+version_cmd: "tlsx -version"
+
+install:
+  go: "go install github.com/projectdiscovery/tlsx/cmd/tlsx@latest"
+  docker: "docker pull projectdiscovery/tlsx:latest"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标主机（IP 或域名，可含端口）"
+    required: true
+  - name: port
+    type: string
+    description: "目标端口"
+    default: "443"
+  - name: probes
+    type: string
+    description: "探测项目（逗号分隔）"
+    default: "san,cn,tls-version,cipher,jarm"
+    enum: ["san,cn,tls-version,cipher,jarm", "san,cn,tls-version", "version-enum,cipher-enum", "jarm,ja3"]
+  - name: misconfig
+    type: string
+    description: "是否检测证书错误配置（true/false）"
+    default: "true"
+    enum: ["true", "false"]
+
+command_template: |
+  -u {{.target}}
+  -p {{.port}}
+  -san -cn -tv -cipher -jarm
+  {{if eq .misconfig "true"}}-ex -ss -mm -re -un{{end}}
+  -json
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: host, path: "host" }
+      - { name: port, path: "port" }
+      - { name: tls_version, path: "tls_version" }
+      - { name: cipher, path: "cipher" }
+      - { name: san, path: "subject_an" }
+      - { name: cn, path: "subject_cn" }
+      - { name: jarm, path: "jarm_hash" }
+      - { name: expired, path: "expired" }
+      - { name: self_signed, path: "self_signed" }
+      - { name: mismatched, path: "mismatched" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: host
+  detail_template: "{{.host}}:{{.port}} TLS:{{.tls_version}} CN:{{.cn}} JARM:{{.jarm}}"
+
+constraints:
+  timeout: 120s
+  max_concurrent: 3

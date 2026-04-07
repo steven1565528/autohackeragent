@@ -1,0 +1,66 @@
+---
+name: supply-chain-audit
+description: "供应链安全审计。当指纹识别发现 WordPress/Jenkins/Struts/Django 等已知框架、或发现 /package.json /composer.json /package-lock.json /Gemfile 等依赖声明文件时使用。框架和组件版本直接关联 CVE——这是利用链的第一步，也是最容易忽略的攻击面"
+metadata:
+  tags: "supply-chain,component,cdn,third-party,js,npm,subdomain-takeover,供应链,组件安全"
+  category: "general"
+---
+
+# 供应链安全审计方法论
+
+供应链攻击不需要突破目标的代码——只需要目标依赖的某个组件有漏洞或被投毒。
+
+## ⛔ 深入参考（必读）
+
+- 子域名接管、CDN/SRI 安全、第三方脚本风险、退役组件、风险评估矩阵 → [references/supply-chain-deep.md](references/supply-chain-deep.md)
+
+## Phase 1: 组件发现
+
+### 前端 JS 库识别
+```bash
+katana -u http://target -silent -d 2
+```
+从 HTML/JS 提取：`<script src="...jquery-3.6.0.min.js">` → jQuery 3.6.0
+
+### 后端技术栈
+```bash
+curl -sI http://target | grep -i "Server\|X-Powered-By\|X-AspNet"
+httpx -u http://target -tech-detect -silent
+```
+响应头：`X-Powered-By: Express` | `Server: Apache/2.4.41` | `X-AspNet-Version`
+
+### 子域名 → 第三方服务映射
+```bash
+subfinder -d target.com -silent
+ksubdomain -d target.com
+```
+检查 CNAME：`status.target.com → statuspage.io` | `docs.target.com → gitbook.io`
+
+## Phase 2: 已知漏洞关联
+
+组件+版本 → CVE 匹配：
+- jQuery < 3.5.0 → XSS | lodash < 4.17.21 → 命令注入
+- Log4j 2.0-2.14.1 → RCE | Apache 2.4.49-2.4.50 → 路径穿越 RCE
+
+```bash
+nuclei -u http://target -severity critical,high
+```
+
+## Phase 3: 子域名接管
+CNAME 指向已注销服务 → 攻击者注册 → 控制子域名内容
+→ 检测方法和可接管服务列表 → [references/supply-chain-deep.md](references/supply-chain-deep.md)
+
+## Phase 4: CDN 和外部资源
+无 SRI 的 CDN 引用 = CDN 被入侵即中招
+→ 详细评估方法 → [references/supply-chain-deep.md](references/supply-chain-deep.md)
+
+## 注意事项
+- 核心是**完整性**——漏掉一个组件就可能漏掉关键风险
+- 子域名接管是最容易出成果的方向
+
+## SRI 完整性检查
+- crossorigin="anonymous" 跨域属性
+- 浏览器校验 SRI hash：不匹配则拒绝加载（安全机制）
+
+## 子域名接管
+- CNAME 指向已过期服务：注册同名账号接管域名，托管恶意内容

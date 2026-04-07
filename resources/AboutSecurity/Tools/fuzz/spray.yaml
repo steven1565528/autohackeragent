@@ -1,0 +1,108 @@
+id: ext_spray
+name: spray 目录爆破与指纹识别
+description: "使用 spray (chainreactors) 进行高性能 Web 目录爆破，支持掩码/规则字典生成、智能过滤、全量指纹识别（gogo/wappalyzer/fingerprinthub）、备份文件探测、爬虫、断点续传"
+homepage: "https://github.com/chainreactors/spray"
+category: fuzz
+binary: spray
+version_cmd: "spray --version"
+
+install:
+  manual: "https://github.com/chainreactors/spray/releases"
+
+parameters:
+  - name: url
+    type: string
+    description: "目标 URL（如 http://example.com）"
+    required: true
+  - name: dict
+    type: string
+    description: "字典文件路径（可多个逗号分隔）"
+  - name: word
+    type: string
+    description: "掩码字典生成 DSL（如 /api/{?l#3}）"
+  - name: rules
+    type: string
+    description: "规则文件路径（hashcat 格式）"
+  - name: extension
+    type: string
+    description: "扩展名列表（逗号分隔，如 php,jsp,html）"
+  - name: method
+    type: string
+    description: "HTTP 请求方法"
+    default: "GET"
+    enum: ["GET", "POST", "PUT", "HEAD"]
+  - name: thread
+    type: string
+    description: "每个池的线程数"
+    default: "20"
+  - name: advance
+    type: string
+    description: "是否启用全部插件（指纹、备份、爬虫、通用文件，true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: finger
+    type: string
+    description: "是否启用扩展指纹识别（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: crawl
+    type: string
+    description: "是否启用爬虫（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: bak
+    type: string
+    description: "是否探测备份文件（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: depth
+    type: string
+    description: "递归爆破深度（0=不递归）"
+    default: "0"
+  - name: rate_limit
+    type: string
+    description: "每秒请求速率限制（0=不限）"
+    default: "0"
+
+command_template: |
+  -u {{.url}}
+  {{if .dict}}-d {{.dict}}{{end}}
+  {{if .word}}-w "{{.word}}"{{end}}
+  {{if .rules}}-r {{.rules}}{{end}}
+  {{if .extension}}-e {{.extension}}{{end}}
+  -x {{.method}}
+  -t {{.thread}}
+  {{if eq .advance "true"}}-a{{end}}
+  {{if eq .finger "true"}}--finger{{end}}
+  {{if eq .crawl "true"}}--crawl{{end}}
+  {{if eq .bak "true"}}--bak{{end}}
+  {{if ne .depth "0"}}--depth {{.depth}}{{end}}
+  {{if ne .rate_limit "0"}}--rate-limit {{.rate_limit}}{{end}}
+  -j
+  --auto-file
+  -q
+
+output:
+  mode: file
+  file_pattern: "*.json"
+  parser: json
+  json:
+    fields:
+      - { name: url, path: "url" }
+      - { name: status, path: "status" }
+      - { name: length, path: "length" }
+      - { name: title, path: "title" }
+      - { name: redirect, path: "redirect" }
+      - { name: finger, path: "frameworks" }
+      - { name: extract, path: "extract" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: url
+  detail_template: "[{{.status}}] {{.url}} ({{.length}} bytes) {{.title}}"
+
+constraints:
+  timeout: 600s
+  proxy_flag: "--proxy"
+  max_concurrent: 2

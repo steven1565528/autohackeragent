@@ -1,0 +1,61 @@
+id: ext_fingerprintx
+name: fingerprintx 服务指纹识别
+description: "使用 fingerprintx 对开放端口进行应用层服务识别，支持 51 种协议（SSH/RDP/MySQL/Redis/HTTP/SMB/FTP 等），JSON 输出含服务元数据"
+homepage: "https://github.com/praetorian-inc/fingerprintx"
+category: scan
+binary: fingerprintx
+version_cmd: "fingerprintx -h 2>&1 | head -1"
+
+install:
+  go: "go install github.com/praetorian-inc/fingerprintx/cmd/fingerprintx@latest"
+
+parameters:
+  - name: target
+    type: string
+    description: "目标 HOST:PORT（逗号分隔多个，如 192.168.1.1:80,192.168.1.1:22）"
+    required: true
+  - name: fast
+    type: string
+    description: "是否启用快速模式（仅尝试端口默认服务，true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: udp
+    type: string
+    description: "是否运行 UDP 插件（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: timeout
+    type: string
+    description: "超时毫秒数"
+    default: "500"
+
+command_template: |
+  -t {{.target}}
+  {{if eq .fast "true"}}--fast{{end}}
+  {{if eq .udp "true"}}-U{{end}}
+  -w {{.timeout}}
+  --json
+  -o {{.OutputFile}}
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: json
+  json:
+    fields:
+      - { name: host, path: "host" }
+      - { name: ip, path: "ip" }
+      - { name: port, path: "port" }
+      - { name: service, path: "service" }
+      - { name: transport, path: "transport" }
+      - { name: metadata, path: "metadata" }
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: host
+  detail_template: "{{.service}}://{{.ip}}:{{.port}} ({{.transport}})"
+
+constraints:
+  timeout: 300s
+  max_concurrent: 3

@@ -1,0 +1,65 @@
+id: ext_mapcidr
+name: mapCIDR 网段处理
+description: "使用 mapcidr 进行 CIDR 展开、切片、聚合、IP 过滤匹配等操作，支持 IPv4/IPv6 转换和 IP 格式化"
+homepage: "https://github.com/projectdiscovery/mapcidr"
+category: scan
+binary: mapcidr
+version_cmd: "mapcidr -version"
+
+install:
+  go: "go install github.com/projectdiscovery/mapcidr/cmd/mapcidr@latest"
+  docker: "docker pull projectdiscovery/mapcidr:latest"
+
+parameters:
+  - name: cidr
+    type: string
+    description: "CIDR 范围或 IP（如 192.168.1.0/24 或 10.0.0.0/8）"
+    required: true
+  - name: operation
+    type: string
+    description: "操作类型"
+    default: "expand"
+    enum: ["expand", "aggregate", "count", "slice_by_host", "slice_by_cidr", "shuffle"]
+  - name: slice_count
+    type: string
+    description: "切片数量（slice_by_host 或 slice_by_cidr 模式使用）"
+    default: "256"
+  - name: skip_base
+    type: string
+    description: "是否跳过 .0 基础 IP（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+  - name: skip_broadcast
+    type: string
+    description: "是否跳过 .255 广播 IP（true/false）"
+    default: "false"
+    enum: ["true", "false"]
+
+command_template: |
+  -cl {{.cidr}}
+  {{if eq .operation "aggregate"}}-aggregate{{end}}
+  {{if eq .operation "count"}}-count{{end}}
+  {{if eq .operation "slice_by_host"}}-sbh {{.slice_count}}{{end}}
+  {{if eq .operation "slice_by_cidr"}}-sbc {{.slice_count}}{{end}}
+  {{if eq .operation "shuffle"}}-si{{end}}
+  {{if eq .skip_base "true"}}-skip-base{{end}}
+  {{if eq .skip_broadcast "true"}}-skip-broadcast{{end}}
+  -o {{.OutputFile}}
+  -silent
+
+output:
+  mode: file
+  file_pattern: "{{.OutputFile}}"
+  parser: line
+  line:
+    skip_empty: true
+
+findings_mapping:
+  type: info
+  severity: info
+  target_field: line
+  detail_template: "{{.line}}"
+
+constraints:
+  timeout: 120s
+  max_concurrent: 3

@@ -139,6 +139,7 @@ class CodeGenTool(BaseTool):
                 success=result.returncode == 0,
                 output=combined,
                 error=None if result.returncode == 0 else f"Exit code: {result.returncode}",
+                raw_output=(result.stdout or "") + (result.stderr or ""),
                 metadata={
                     "language": language,
                     "description": description,

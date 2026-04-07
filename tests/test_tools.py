@@ -28,6 +28,15 @@ class TestFlagParser:
         assert not FlagParser.validate_flag("not_a_flag")
         assert not FlagParser.validate_flag("")
 
+    def test_rejects_placeholder_flag_examples(self):
+        assert FlagParser.extract_flags("Format check uses flag{...}") == []
+        assert not FlagParser.contains_flag("Format check uses flag{...}")
+        assert not FlagParser.validate_flag("flag{...}")
+
+    def test_rejects_code_snippet_false_positive(self):
+        text = "print('FLAG FOUND!')\nflag = re.search(r'flag\\\\{[^}]+\\\\}', body)"
+        assert FlagParser.extract_flags(text) == []
+
 
 class TestToolResult:
     def test_success_result(self):

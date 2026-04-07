@@ -7,6 +7,7 @@ from tools.exploit_tool import ExploitTool
 from tools.file_tools import FileReadTool, FileWriteTool, FileSearchTool
 from tools.skill_tool import SkillTool
 from tools.codegen_tool import CodeGenTool
+from tools.aboutsecurity_tool import AboutSecurityTool
 
 TOOL_REGISTRY = {
     "shell": ShellTool,
@@ -21,6 +22,7 @@ TOOL_REGISTRY = {
     "file_search": FileSearchTool,
     "skill": SkillTool,
     "codegen": CodeGenTool,
+    "aboutsecurity": AboutSecurityTool,
 }
 
 

@@ -1,94 +1,213 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ============================================================
-# Auto-Hacker Agent - CVM 环境工具安装脚本
-# 目标环境: Ubuntu 24, 8C16G
+# Auto-Hacker Agent - Ubuntu 24 provisioning script
+# Recommended host: 8C16G / 50G
+# Profiles:
+#   core - fast baseline for most web/CTF workflows
+#   full - recommended competition profile
+#   max  - full + heavier extras
 # ============================================================
 
-set -e
+set -euo pipefail
 
-echo "========================================"
-echo " Auto-Hacker Agent 工具安装脚本"
-echo "========================================"
+PROFILE="full"
+WAIT_FOR_APT=1
+SKIP_METASPLOIT=0
+INSTALL_PYTHON_DEPS=1
 
-# 更新软件源
-echo "[1/8] 更新软件源..."
-sudo apt-get update -qq
+usage() {
+  cat <<'EOF'
+Usage: ./setup_tools.sh [--profile core|full|max] [--no-wait] [--skip-metasploit] [--skip-python]
 
-# 安装基础工具
-echo "[2/8] 安装基础工具..."
-sudo apt-get install -y -qq \
-    curl wget git vim unzip \
-    net-tools iputils-ping dnsutils \
-    build-essential python3-pip python3-venv \
-    jq
+Examples:
+  ./setup_tools.sh
+  ./setup_tools.sh --profile core
+  ./setup_tools.sh --profile max --skip-metasploit
+EOF
+}
 
-# 安装网络扫描工具
-echo "[3/8] 安装网络扫描工具..."
-sudo apt-get install -y -qq \
-    nmap \
-    masscan \
-    netcat-openbsd
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile)
+      PROFILE="${2:-}"
+      shift 2
+      ;;
+    --no-wait)
+      WAIT_FOR_APT=0
+      shift
+      ;;
+    --skip-metasploit)
+      SKIP_METASPLOIT=1
+      shift
+      ;;
+    --skip-python)
+      INSTALL_PYTHON_DEPS=0
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
 
-# 安装 Web 渗透工具
-echo "[4/8] 安装 Web 渗透工具..."
-sudo apt-get install -y -qq \
-    nikto \
-    dirb \
-    gobuster \
-    whatweb \
-    wfuzz
-
-# 安装 SQLMap
-echo "[5/8] 安装 SQLMap..."
-sudo apt-get install -y -qq sqlmap
-
-# 安装密码破解工具
-echo "[6/8] 安装密码破解工具..."
-sudo apt-get install -y -qq \
-    hydra \
-    john \
-    hashcat
-
-# 安装其他渗透工具
-echo "[7/8] 安装其他渗透工具..."
-sudo apt-get install -y -qq \
-    smbclient \
-    enum4linux \
-    sshpass \
-    proxychains4 \
-    socat
-
-# 安装 Metasploit Framework（可选，较大）
-echo "[8/8] 安装 Metasploit Framework..."
-if ! command -v msfconsole &> /dev/null; then
-    curl -s https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > /tmp/msfinstall
-    chmod 755 /tmp/msfinstall
-    /tmp/msfinstall || echo "警告: Metasploit 安装失败，可跳过"
-else
-    echo "Metasploit 已安装，跳过"
+if [[ "$PROFILE" != "core" && "$PROFILE" != "full" && "$PROFILE" != "max" ]]; then
+  echo "Invalid profile: $PROFILE" >&2
+  exit 1
 fi
 
-# 安装 Python 依赖
-echo "安装 Python 依赖..."
-cd "$(dirname "$0")"
-pip3 install -r requirements.txt
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
 
-# 创建日志目录
+wait_for_apt() {
+  local waited=0
+  local max_wait=600
+  while sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+    if (( waited == 0 )); then
+      echo "Waiting for apt/dpkg lock to clear..."
+    fi
+    sleep 5
+    waited=$((waited + 5))
+    if (( waited >= max_wait )); then
+      echo "Timed out waiting for apt lock." >&2
+      exit 1
+    fi
+  done
+}
+
+apt_install() {
+  if (( WAIT_FOR_APT )); then
+    wait_for_apt
+  fi
+  sudo apt-get install -y -qq "$@"
+}
+
+verify_tools() {
+  local missing=()
+  for tool in "$@"; do
+    if ! need_cmd "$tool"; then
+      missing+=("$tool")
+    fi
+  done
+
+  if (( ${#missing[@]} )); then
+    echo "WARNING: missing tools after installation: ${missing[*]}"
+  else
+    echo "Verified tools: $*"
+  fi
+}
+
+echo "========================================"
+echo " Auto-Hacker Agent provisioning"
+echo "========================================"
+echo "Profile: $PROFILE"
+
+if [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+  echo "OS: ${PRETTY_NAME:-unknown}"
+fi
+
+echo "[1/7] Updating apt metadata..."
+if (( WAIT_FOR_APT )); then
+  wait_for_apt
+fi
+sudo apt-get update -qq
+
+BASE_PACKAGES=(
+  curl wget git vim unzip jq
+  net-tools iputils-ping dnsutils
+  build-essential python3-pip python3-venv
+  ca-certificates software-properties-common
+)
+
+CORE_SCAN_PACKAGES=(
+  nmap masscan netcat-openbsd
+  gobuster dirb
+  sqlmap
+  smbclient enum4linux sshpass socat proxychains4
+)
+
+FULL_WEB_PACKAGES=(
+  nikto whatweb wfuzz
+)
+
+FULL_EXTRA_PACKAGES=(
+  hydra john hashcat
+)
+
+MAX_EXTRA_PACKAGES=(
+  redis-tools default-mysql-client postgresql-client ldap-utils
+)
+
+echo "[2/7] Installing base packages..."
+apt_install "${BASE_PACKAGES[@]}"
+verify_tools curl wget git python3 pip3
+
+echo "[3/7] Installing core competition tools..."
+apt_install "${CORE_SCAN_PACKAGES[@]}"
+verify_tools nmap gobuster dirb sqlmap smbclient enum4linux sshpass socat
+
+if [[ "$PROFILE" == "full" || "$PROFILE" == "max" ]]; then
+  echo "[4/7] Installing extended web and cracking tools..."
+  apt_install "${FULL_WEB_PACKAGES[@]}" "${FULL_EXTRA_PACKAGES[@]}"
+  verify_tools nikto whatweb wfuzz hydra john
+else
+  echo "[4/7] Skipping extended packages for core profile."
+fi
+
+if [[ "$PROFILE" == "max" ]]; then
+  echo "[5/7] Installing max-profile extras..."
+  apt_install "${MAX_EXTRA_PACKAGES[@]}"
+  verify_tools redis-cli mysql psql
+else
+  echo "[5/7] Skipping max-profile extras."
+fi
+
+if (( ! SKIP_METASPLOIT )) && [[ "$PROFILE" != "core" ]]; then
+  echo "[6/7] Installing Metasploit (optional, heavy)..."
+  if need_cmd msfconsole; then
+    echo "Metasploit already installed; skipping."
+  else
+    curl -s https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > /tmp/msfinstall
+    chmod 755 /tmp/msfinstall
+    /tmp/msfinstall || echo "WARNING: Metasploit installation failed; continuing."
+  fi
+else
+  echo "[6/7] Skipping Metasploit."
+fi
+
+echo "[7/7] Finalizing project environment..."
+cd "$(dirname "$0")"
 mkdir -p logs
 
-echo ""
-echo "========================================"
-echo " 安装完成！"
-echo "========================================"
-echo ""
-echo "已安装工具列表:"
-echo "  - nmap, masscan, netcat"
-echo "  - nikto, dirb, gobuster, whatweb, wfuzz"
-echo "  - sqlmap"
-echo "  - hydra, john, hashcat"
-echo "  - smbclient, enum4linux, proxychains"
-echo "  - metasploit (如安装成功)"
-echo ""
-echo "下一步: 复制 .env.example 为 .env 并配置 API Key"
-echo "  cp .env.example .env"
-echo "  vim .env"
+if (( INSTALL_PYTHON_DEPS )); then
+  if [[ ! -d .venv ]]; then
+    python3 -m venv .venv
+  fi
+  .venv/bin/pip install --upgrade pip
+  .venv/bin/pip install -r requirements.txt pytest
+fi
+
+cat <<EOF
+
+========================================
+ Provisioning complete
+========================================
+
+Profile: $PROFILE
+Python venv: $( [[ -d .venv ]] && echo "ready" || echo "not created" )
+
+Suggested next steps:
+  cp .env.example .env
+  source .venv/bin/activate
+  python3 main.py --list-models
+
+Recommended competition profile on Ubuntu 24 / 8C16G / 50G:
+  ./setup_tools.sh --profile full
+EOF
