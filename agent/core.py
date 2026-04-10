@@ -1098,11 +1098,33 @@ class PentestAgent:
                 if not c:
                     logger.info("All challenges processed")
                     break
+
+                # Skip challenges already fully solved
+                if c.is_solved:
+                    self.planner.mark_solved(c.id)
+                    logger.info(f"Challenge {c.id} already solved – skipping")
+                    challenges = self.platform.get_challenges()
+                    continue
+
                 started = self.platform.start_challenge(c.id)
                 if started:
+                    if started.status == ChallengeStatus.SOLVED:
+                        # The API told us it's already completed
+                        self.planner.mark_solved(c.id)
+                        logger.info(f"Challenge {c.id} already completed")
+                        challenges = self.platform.get_challenges()
+                        continue
                     c.target_host = started.target_host
                     c.target_port = started.target_port
                     c.status = ChallengeStatus.RUNNING
+                    if started.entrypoint:
+                        c.entrypoint = started.entrypoint
+                else:
+                    logger.warning(f"Could not start {c.id} – skipping")
+                    self.planner.mark_failed(c.id)
+                    challenges = self.platform.get_challenges()
+                    continue
+
                 ok = self.solve_challenge(c)
                 if ok:
                     self.planner.mark_solved(c.id)

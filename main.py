@@ -161,9 +161,20 @@ def main():
             logger.warning("Failed to find the flag within step limit.")
         return
 
+    # Resolve platform settings: env vars take precedence over config.yaml.
+    platform_cfg = config.get("platform", {})
+    server_host = os.getenv("SERVER_HOST") or platform_cfg.get("server_host", "") or platform_cfg.get("api_base", "")
+    agent_token = os.getenv("AGENT_TOKEN") or os.getenv("PLATFORM_TEAM_TOKEN") or platform_cfg.get("agent_token", "") or platform_cfg.get("team_token", "")
+    # Ensure the base URL has a scheme
+    if server_host and not server_host.startswith(("http://", "https://")):
+        server_host = f"http://{server_host}"
+    if not server_host or not agent_token:
+        logger.error("Platform config missing: set SERVER_HOST and AGENT_TOKEN env vars or config.yaml platform section")
+        return
+    logger.info(f"Platform: {server_host}")
     platform = PlatformClient(
-        api_base=config.get("platform", {}).get("api_base", ""),
-        team_token=config.get("platform", {}).get("team_token", ""),
+        api_base=server_host,
+        team_token=agent_token,
     )
     try:
         agent = PentestAgent(
