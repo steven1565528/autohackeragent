@@ -92,11 +92,13 @@ llm:
   request_timeout: 120  # 秒
 
 # --- 比赛平台 API 配置 ---
+# 第二届腾讯云黑客松智能渗透挑战赛 API
+# 环境变量 SERVER_HOST / AGENT_TOKEN 优先于此处配置
 platform:
-  # 官方 API 基地址（赛前更新）
-  api_base: "https://api.competition.example.com"
-  # 队伍 Token（赛前更新）
-  team_token: ""
+  # 平台服务器地址（从"环境配置"页面获取 SERVER_HOST）
+  server_host: ""
+  # 队伍 Agent Token（从"环境配置"页面获取 AGENT_TOKEN）
+  agent_token: ""
 
 # --- Agent 运行参数 ---
 agent:
