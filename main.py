@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 from pathlib import Path
 
 import yaml
@@ -52,6 +53,8 @@ def run_self_check(config: dict) -> int:
     print("== Auto-Hacker Self Check ==")
     print(f"Config file: {Path('config.yaml').resolve()}")
     print(f"Active model: {config.get('llm', {}).get('active_model', '')}")
+    # Show Python version to confirm Python 3.12 compatibility
+    print(f"- Python: {sys.version}")
 
     env_checks = [
         "DEEPSEEK_API_KEY",
@@ -89,6 +92,7 @@ def run_self_check(config: dict) -> int:
     print("\nWorkspace:")
     print(f"- venv python: {'present' if venv_python.exists() else 'missing'}")
     print(f"- logs dir: {'present' if Path('logs').exists() else 'missing'}")
+    print(f"- state dir: {'present' if Path('state').exists() else 'missing'}")
     print(f"- .env file: {'present' if Path('.env').exists() else 'missing'}")
     print(f"- AboutSecurity: {'present' if Path('resources/AboutSecurity/manifest.yaml').exists() else 'missing'}")
 
@@ -109,6 +113,9 @@ def main():
     # Load environment variables (API keys)
     load_dotenv()
     config = load_config("config.yaml")
+    # Ensure required directories exist on every startup
+    Path("logs").mkdir(exist_ok=True)
+    Path("state").mkdir(exist_ok=True)
     setup_logging(
         log_dir=config.get("logging", {}).get("log_dir", "./logs"),
         level=config.get("logging", {}).get("level", "INFO"),

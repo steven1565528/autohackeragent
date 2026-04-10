@@ -63,7 +63,13 @@ class ShellTool(BaseTool):
             return ToolResult(success=False, output="", error=blocked)
         logger.info(f"Shell: {command}")
         try:
-            result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+            # encoding='utf-8' with errors='replace' prevents UnicodeDecodeError when
+            # tools produce non-UTF-8 output (e.g., binary data) on Ubuntu 24 default locale
+            result = subprocess.run(
+                command, shell=True, capture_output=True,
+                encoding='utf-8', errors='replace',
+                timeout=timeout, cwd=cwd,
+            )
             stdout = self._truncate(result.stdout)
             stderr = self._truncate(result.stderr)
             combined = stdout

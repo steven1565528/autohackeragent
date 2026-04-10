@@ -24,13 +24,17 @@ console = Console(theme=THEME)
 
 
 def setup_logging(log_dir: str = "./logs", level: str = "INFO") -> None:
-    log_path = Path(log_dir)
+    root_logger = logging.getLogger()
+
+    # Guard against duplicate handler registration when called multiple times
+    if root_logger.handlers:
+        return
+
     log_path.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = log_path / f"agent_{timestamp}.log"
 
-    root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
 
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
