@@ -30,6 +30,7 @@ def setup_logging(log_dir: str = "./logs", level: str = "INFO") -> None:
     if root_logger.handlers:
         return
 
+    log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
