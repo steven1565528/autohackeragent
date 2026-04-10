@@ -6,6 +6,8 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+_DIFFICULTY_ORDER = {"easy": 0, "medium": 1, "hard": 2}
+
 
 class TaskPlanner:
     def __init__(self, config: dict = None):
@@ -27,11 +29,10 @@ class TaskPlanner:
             return None
 
         # Primary sort: level (ascending) then difficulty then score (descending).
-        difficulty_order = {"easy": 0, "medium": 1, "hard": 2}
         available.sort(
             key=lambda c: (
                 c.level,
-                difficulty_order.get(c.difficulty, 99),
+                _DIFFICULTY_ORDER.get(c.difficulty, 99),
                 self.failed_challenges.get(c.id, 0),
                 -c.base_score,
             )
