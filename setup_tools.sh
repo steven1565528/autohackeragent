@@ -85,7 +85,8 @@ apt_install() {
   if (( WAIT_FOR_APT )); then
     wait_for_apt
   fi
-  sudo apt-get install -y -qq "$@"
+  # --no-install-recommends saves disk space, suitable for CVM environments
+  sudo apt-get install -y -qq --no-install-recommends "$@"
 }
 
 verify_tools() {
@@ -123,6 +124,8 @@ BASE_PACKAGES=(
   curl wget git vim unzip jq
   net-tools iputils-ping dnsutils
   build-essential python3-pip python3-venv
+  # python3-full ensures venv works correctly on Ubuntu 24.04
+  python3-full
   ca-certificates software-properties-common
 )
 
@@ -130,15 +133,18 @@ CORE_SCAN_PACKAGES=(
   nmap masscan netcat-openbsd
   gobuster dirb
   sqlmap
-  smbclient enum4linux sshpass socat proxychains4
+  # enum4linux-ng replaces enum4linux on Ubuntu 24.04
+  smbclient enum4linux enum4linux-ng sshpass socat proxychains4
 )
 
 FULL_WEB_PACKAGES=(
-  nikto whatweb wfuzz
+  # nikto and whatweb are available via apt; wfuzz is no longer in Ubuntu 24 apt repos
+  # ffuf is a modern alternative to wfuzz/dirb and available via apt
+  nikto whatweb ffuf
 )
 
 FULL_EXTRA_PACKAGES=(
-  hydra john hashcat
+  hydra john
 )
 
 MAX_EXTRA_PACKAGES=(
@@ -147,16 +153,22 @@ MAX_EXTRA_PACKAGES=(
 
 echo "[2/7] Installing base packages..."
 apt_install "${BASE_PACKAGES[@]}"
-verify_tools curl wget git python3 pip3
+# pip3 may not be in PATH on Ubuntu 24; check python3 instead
+verify_tools curl wget git python3
 
 echo "[3/7] Installing core competition tools..."
 apt_install "${CORE_SCAN_PACKAGES[@]}"
-verify_tools nmap gobuster dirb sqlmap smbclient enum4linux sshpass socat
+# enum4linux-ng replaces enum4linux on Ubuntu 24; verify whichever is available
+verify_tools nmap gobuster dirb sqlmap smbclient sshpass socat
 
 if [[ "$PROFILE" == "full" || "$PROFILE" == "max" ]]; then
   echo "[4/7] Installing extended web and cracking tools..."
   apt_install "${FULL_WEB_PACKAGES[@]}" "${FULL_EXTRA_PACKAGES[@]}"
-  verify_tools nikto whatweb wfuzz hydra john
+  # hashcat may require OpenCL drivers on some Ubuntu 24 environments; install optionally
+  apt_install hashcat || echo "WARNING: hashcat installation failed; continuing without it."
+  # wfuzz is no longer in Ubuntu 24 apt repos; install via pip into the project venv
+  # (done after venv creation in step 7)
+  verify_tools nikto whatweb ffuf hydra john
 else
   echo "[4/7] Skipping extended packages for core profile."
 fi
@@ -184,14 +196,21 @@ fi
 
 echo "[7/7] Finalizing project environment..."
 cd "$(dirname "$0")"
-mkdir -p logs
+mkdir -p logs state
 
 if (( INSTALL_PYTHON_DEPS )); then
   if [[ ! -d .venv ]]; then
     python3 -m venv .venv
   fi
-  .venv/bin/pip install --upgrade pip
-  .venv/bin/pip install -r requirements.txt pytest
+  # --no-warn-script-location avoids noisy warnings when running inside venv
+  .venv/bin/pip install --upgrade pip --no-warn-script-location
+  .venv/bin/pip install -r requirements.txt pytest --no-warn-script-location
+
+  # wfuzz is not in Ubuntu 24 apt repos; install via pip as fallback
+  if [[ "$PROFILE" == "full" || "$PROFILE" == "max" ]]; then
+    .venv/bin/pip install wfuzz dirsearch --no-warn-script-location || \
+      echo "WARNING: wfuzz/dirsearch pip install failed; ffuf (apt) is available as alternative."
+  fi
 fi
 
 cat <<EOF

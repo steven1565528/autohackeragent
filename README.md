@@ -99,6 +99,8 @@ Skills 将多步操作封装为单次调用，**节省约 65% Token**:
 
 ### 1. 环境准备（CVM 上执行）
 
+> **Python 版本说明**：Ubuntu 24.04 LTS 默认搭载 **Python 3.12**，本项目已完整兼容 Python 3.10 ~ 3.12。
+
 ```bash
 # 推荐：Ubuntu 24 / 8C16G / 50G 使用 full profile
 chmod +x setup_tools.sh
@@ -111,14 +113,20 @@ chmod +x setup_tools.sh
 # 配置 API Key
 cp .env.example .env
 vim .env  # 填入你的 API Key
+
+# 创建必要目录（setup_tools.sh 和 main.py 启动时会自动创建，手动也可）
+mkdir -p state logs
 ```
+
+> **注意（wfuzz）**：Ubuntu 24.04 apt 仓库中已不包含 `wfuzz`，`setup_tools.sh` 会在 `full`/`max` profile 下自动通过 pip 安装。`ffuf` 已作为现代替代方案加入 apt 安装列表。
 
 ### 1.1 上传到 GitHub 前建议
 
 ```bash
 git status
 .venv/bin/pytest -q
-.venv/bin/python main.py --self-check
+# 验证环境、工具和配置就绪情况
+python3 main.py --self-check
 ```
 
 如果这三步正常，再推到 GitHub，会比“边传边修”稳定很多。
@@ -147,6 +155,9 @@ python3 main.py --model deepseek-chat
 
 # 查看可用模型
 python3 main.py --list-models
+
+# 一键验证环境就绪情况
+python3 main.py --self-check
 ```
 
 ### 4. CVM 部署建议
@@ -156,7 +167,7 @@ python3 main.py --list-models
 - Ubuntu 24.04
 - 8C16G
 - 50G 磁盘
-- Python 3.10+
+- Python 3.10~3.12（Ubuntu 24 默认 3.12，已完整兼容）
 
 推荐部署流程：
 
@@ -189,7 +200,6 @@ Agent 启动时会自动探测当前机器上已安装的工具，并把结果�
 - 优先使用现场已安装工具
 - 对缺失工具自动降级到可用方案
 - 减少 `command not found` 带来的步数浪费
-
 ## ⚙️ 支持的模型
 
 | 模型 | Provider | 说明 |

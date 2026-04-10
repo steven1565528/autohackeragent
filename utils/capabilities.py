@@ -8,14 +8,18 @@ TOOL_COMMANDS = {
     "shell": [],
     "curl": ["curl"],
     "nmap": ["nmap"],
-    "dirscan": ["gobuster", "dirb"],
+    # ffuf is available via apt on Ubuntu 24 and is a modern alternative to gobuster/dirb
+    "dirscan": ["gobuster", "dirb", "ffuf"],
     "nikto": ["nikto"],
+    # whatweb is available via apt and useful for web fingerprinting
+    "whatweb": ["whatweb"],
     "sqlmap": ["sqlmap"],
     "exploit": ["searchsploit", "msfconsole", "msfvenom", "nc"],
     "file_read": [],
     "file_write": [],
     "file_search": ["find", "grep"],
     "skill": ["curl", "find", "grep", "nmap"],
+    # python3 path is /usr/bin/python3 on Ubuntu 24; detect python3 not pip3
     "codegen": ["python3", "bash"],
 }
 

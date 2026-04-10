@@ -1,6 +1,7 @@
 """LLM abstraction layer - multi-model unified calling via litellm"""
 
 import os
+import random
 import time
 from typing import Any, Dict, List, Optional
 import litellm
@@ -9,6 +10,9 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 load_dotenv()
+
+# Suppress litellm verbose/debug output; litellm.set_verbose is deprecated in newer versions
+os.environ.setdefault("LITELLM_LOG", "ERROR")
 
 PROVIDER_ENV_KEYS = {
     "zhipu": "ZHIPU_API_KEY", "xiaomi": "XIAOMI_API_KEY",
@@ -32,7 +36,8 @@ class LLMClient:
         self.request_timeout = config.get("request_timeout", 120)
         self.usage_stats: Dict[str, Dict[str, int]] = {}
         litellm.drop_params = True
-        litellm.set_verbose = False
+        # litellm.set_verbose is deprecated in newer litellm versions; use env var instead
+        litellm.suppress_debug_info = True
         if self.active_model_name:
             logger.info(f"LLM client initialized: [{self.active_model_name}]")
 
@@ -86,6 +91,15 @@ class LLMClient:
                     s["total_tokens"] += getattr(usage, "total_tokens", 0)
                     s["calls"] += 1
                 return content
+            except (litellm.AuthenticationError, litellm.PermissionDeniedError) as e:
+                # Authentication errors won't be fixed by retrying; fail fast
+                logger.error(f"LLM authentication error: {str(e)[:200]}")
+                raise
+            except litellm.ServiceUnavailableError as e:
+                logger.warning(f"LLM service unavailable (attempt {attempt + 1}/{self.retry_count}): {str(e)[:200]}")
+                if attempt < self.retry_count - 1:
+                    jitter = random.uniform(0, self.retry_delay * 0.5)
+                    time.sleep(self.retry_delay * (attempt + 1) + jitter)
             except Exception as e:
                 error_msg = str(e)
                 logger.warning(f"LLM call failed (attempt {attempt + 1}/{self.retry_count}): {error_msg[:200]}")
@@ -101,7 +115,9 @@ class LLMClient:
                         model_string = self._build_model_string(config)
                         continue
                 if attempt < self.retry_count - 1:
-                    time.sleep(self.retry_delay * (attempt + 1))
+                    # Add jitter to avoid retry storms in concurrent scenarios
+                    jitter = random.uniform(0, self.retry_delay * 0.5)
+                    time.sleep(self.retry_delay * (attempt + 1) + jitter)
         raise RuntimeError(f"LLM call failed after {self.retry_count} retries")
 
     def _should_switch_model(self, error_msg: str) -> bool:

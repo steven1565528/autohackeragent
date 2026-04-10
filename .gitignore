@@ -15,6 +15,7 @@ venv/
 # 日志
 logs/
 state/*.json
+!state/.gitkeep
 
 # IDE
 .vscode/
